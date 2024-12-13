@@ -10,6 +10,9 @@
     "package": "plasmo package"
   },
   "dependencies": {
+    "@plasmohq/storage": "^1.13.0",
+    "bcryptjs": "^2.4.3",
+    "openpgp": "^6.0.1",
     "plasmo": "0.89.4",
     "react": "18.2.0",
     "react-dom": "18.2.0",
