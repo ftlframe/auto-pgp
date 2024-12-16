@@ -1,7 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import EncryptTab from "~encrypt-tab"
-import { CountButton } from "~features/count-button"
-import { get_keys } from "~features/key-generation"
 import HomeTab from "~home-tab/home-tab"
 import KeysTab from "~keys-tab/keys-tab"
 
@@ -11,32 +9,73 @@ import "~style.css"
 interface AppContextType {
   email: string;
   setEmail: (email: string) => void;
-  pubKeys: string[];
-  setPubKeys: (keys: string[]) => void;
+  vault: string[];
+  setVault: (keys: string[]) => void;
+  set_and_update: (id: string, public_: string, private_: string) => void;
 }
 
 // Create the context
 export const AppContext = createContext<AppContextType>({
   email: "",
   setEmail: () => {},
-  pubKeys: [],
-  setPubKeys: () => {}
+  vault: [],
+  setVault: () => {},
+  set_and_update: () => {}
 });
 
 // Create a provider component
 export function AppProvider({ children }: { children: ReactNode }) {
   const [email, setEmail] = useState("");
-  const [pubKeys, setPubKeys] = useState<string[]>([]);
+  const [vault, setVault] = useState([])
+
+  function set_and_update(id, public_, private_) {
+    // console.log(vault)
+    if(Object.keys(vault).length === 0) {
+      console.log('Empty vault while generating first keyring')
+      vault[id] = {
+        pub_keys: [public_],
+        priv_keys: [private_]
+      }
+    } 
+    else {
+      const existing_pub_keys = vault[id]?.pub_keys
+      const existing_priv_keys = vault[id]?.priv_keys
+      if(!existing_priv_keys || !existing_pub_keys) {
+        vault[id] = {
+          pub_keys: [public_],
+          priv_keys: [private_]
+        }
+        
+      }
+      else {
+        existing_pub_keys.push(public_)
+        existing_priv_keys.push(private_)
+    
+        vault[id] = {
+          pub_keys: existing_pub_keys,
+          priv_keys: existing_priv_keys
+        }
+      }
+    }
+    setVault(vault)
+  
+    chrome.storage.local.set({keyring: vault}, () => {
+        console.log('Updated keyring for ' + email )
+    })
+
+  }
 
   useEffect(() => {
     chrome.runtime.sendMessage({ type: "GET_EMAIL" }, (response) => {
       if (response?.email) {
-        setEmail(response.email);
+        setEmail(response.email)
+        // console.log(email)
+
         localStorage.setItem('USERMAIL', response.email);
 
-        chrome.runtime.sendMessage({ type: 'GET_PUB_KEYS', id: response.email}, (response) => {
-          if(response?.public) {
-            setPubKeys(response.public)
+        chrome.runtime.sendMessage({ type: 'GET_VAULT', id: response.email}, (response) => {
+          if(response?.vault) {
+            setVault(response.vault['keyring'])
           }
         })
       }
@@ -48,8 +87,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider value={{ 
       email, 
       setEmail, 
-      pubKeys, 
-      setPubKeys 
+      vault, 
+      setVault,
+      set_and_update
     }}>
       {children}
     </AppContext.Provider>
@@ -63,7 +103,6 @@ export function useAppContext() {
 
 export default function IndexPopup() {
   const [ active_tab, setTab] = useState(0)
-  const { email, setEmail, setPubKeys } = useAppContext(); // Destructure from context
 
   const tabs = [
     { tab_id: 0, label: 'Home' },

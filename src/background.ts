@@ -7,12 +7,15 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
         console.log(`Email updated to: ${currentEmail}`);
     } else if (message.type === "GET_EMAIL") {
         sendResponse({ email: currentEmail });
-    } else if (message.type === 'GET_PUB_KEYS') {
+    } else if (message.type === 'GET_VAULT') {
         const data = await chrome.storage.local.get('keyring');
-        const keyring = data.keyring || {};
-        const pub_keys = keyring[message.id]?.pub_keys || [];
-        console.log(message.id)
-        console.log(pub_keys)
-        sendResponse({public: pub_keys})
+        
+        if(Object.keys(data).length == 0){
+            sendResponse({vault: {keyring: {}}})
+        }
+        else {
+            console.log(data)
+            sendResponse({vault: data})
+        }
     }
 });
