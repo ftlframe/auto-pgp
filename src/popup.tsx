@@ -17,10 +17,10 @@ interface AppContextType {
 // Create the context
 export const AppContext = createContext<AppContextType>({
   email: "",
-  setEmail: () => {},
+  setEmail: () => { },
   vault: [],
-  setVault: () => {},
-  set_and_update: () => {}
+  setVault: () => { },
+  set_and_update: () => { }
 });
 
 // Create a provider component
@@ -29,40 +29,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [vault, setVault] = useState([])
 
   function set_and_update(id, public_, private_) {
-    // console.log(vault)
-    if(Object.keys(vault).length === 0) {
-      console.log('Empty vault while generating first keyring')
-      vault[id] = {
+    const newVault = { ...vault }; // Create a shallow copy of the current vault
+
+    if (Object.keys(newVault).length === 0) {
+      console.log('Empty vault while generating first keyring');
+      newVault[id] = {
         pub_keys: [public_],
         priv_keys: [private_]
-      }
-    } 
-    else {
-      const existing_pub_keys = vault[id]?.pub_keys
-      const existing_priv_keys = vault[id]?.priv_keys
-      if(!existing_priv_keys || !existing_pub_keys) {
-        vault[id] = {
+      };
+    } else {
+      const existing_pub_keys = newVault[id]?.pub_keys;
+      const existing_priv_keys = newVault[id]?.priv_keys;
+
+      if (!existing_priv_keys || !existing_pub_keys) {
+        newVault[id] = {
           pub_keys: [public_],
           priv_keys: [private_]
-        }
-        
-      }
-      else {
-        existing_pub_keys.push(public_)
-        existing_priv_keys.push(private_)
-    
-        vault[id] = {
-          pub_keys: existing_pub_keys,
-          priv_keys: existing_priv_keys
-        }
+        };
+      } else {
+        newVault[id] = {
+          pub_keys: [...existing_pub_keys, public_], // Append without mutating
+          priv_keys: [...existing_priv_keys, private_] // Append without mutating
+        };
       }
     }
-    setVault(vault)
-  
-    chrome.storage.local.set({keyring: vault}, () => {
-        console.log('Updated keyring for ' + email )
-    })
 
+    // Set the updated vault state without mutating
+    setVault({
+      ...vault,
+      ...newVault
+    });
+
+    // Persist to chrome.storage
+    chrome.storage.local.set({ keyring: newVault }, () => {
+      console.log('Updated keyring for ' + email);
+    });
   }
 
   useEffect(() => {
@@ -73,8 +74,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         localStorage.setItem('USERMAIL', response.email);
 
-        chrome.runtime.sendMessage({ type: 'GET_VAULT', id: response.email}, (response) => {
-          if(response?.vault) {
+        chrome.runtime.sendMessage({ type: 'GET_VAULT', id: response.email }, (response) => {
+          if (response?.vault) {
             setVault(response.vault['keyring'])
           }
         })
@@ -84,10 +85,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
 
   return (
-    <AppContext.Provider value={{ 
-      email, 
-      setEmail, 
-      vault, 
+    <AppContext.Provider value={{
+      email,
+      setEmail,
+      vault,
       setVault,
       set_and_update
     }}>
@@ -102,7 +103,7 @@ export function useAppContext() {
 }
 
 export default function IndexPopup() {
-  const [ active_tab, setTab] = useState(0)
+  const [active_tab, setTab] = useState(0)
 
   const tabs = [
     { tab_id: 0, label: 'Home' },

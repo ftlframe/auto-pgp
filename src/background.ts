@@ -14,7 +14,6 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
             sendResponse({vault: {keyring: {}}})
         }
         else {
-            console.log(data)
             sendResponse({vault: data})
         }
     }
