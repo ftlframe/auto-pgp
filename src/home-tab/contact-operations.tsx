@@ -6,7 +6,6 @@ function ContactOperations() {
     const [showPasswordModal, setShowPasswordModal] = useState(true);
     const [password, setPassword] = useState("");
 
-    // Initialize modal state from localStorage
     useEffect(() => {
         const savedModalState = localStorage.getItem("showPasswordModal");
         if(savedModalState) {
@@ -67,13 +66,6 @@ function ContactOperations() {
                                     className="bg-purple-500 text-white px-3 py-1 rounded mr-2"
                                 >
                                     Submit
-                                </button>
-                                <button
-                                    type="button"
-                                    className="bg-gray-300 px-3 py-1 rounded"
-                                    onClick={() => setShowPasswordModal(false)}
-                                >
-                                    Cancel
                                 </button>
                             </div>
                         </form>
