@@ -4,7 +4,7 @@ export async function generate_key() {
     const USERMAIL = localStorage.getItem('USERMAIL')
     const key_object = await openpgp.generateKey({
         userIDs: {email: USERMAIL},
-        type: 'rsa'
+        type: 'ecc'
     })
     const private_key = key_object.privateKey
     const public_key = key_object.publicKey
