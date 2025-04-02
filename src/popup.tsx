@@ -1,12 +1,21 @@
-import { CountButton } from "~features/count-button"
 
+import { LoginScreen } from "~features/auth/LoginScreen"
+import VaultProvider, { useVault, VaultContext } from "~contexts/VaultContext"
 import "~style.css"
+import { useEffect, useState } from "react"
+import { MainLayout } from "~components/layout/MainLayout";
+
+function IndexPopupContent() {
+  const { isUnlocked } = useVault();
+  return isUnlocked ? <MainLayout/> : <LoginScreen/>
+}
 
 function IndexPopup() {
+
   return (
-    <div className="plasmo-flex plasmo-items-center plasmo-justify-center plasmo-h-16 plasmo-w-40">
-      <CountButton />
-    </div>
+    <VaultProvider>
+      <IndexPopupContent/>
+    </VaultProvider>
   )
 }
 

@@ -1,7 +1,6 @@
 import cssText from "data-text:~style.css"
 import type { PlasmoCSConfig } from "plasmo"
 
-import { CountButton } from "~features/count-button"
 
 export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"]
@@ -15,7 +14,7 @@ export const config: PlasmoCSConfig = {
  * rem values would reference the actual page's root font size—often leading to sizing inconsistencies.
  *
  * To address this, we:
- * 1. Replace the `:root` selector with `:host(plasmo-csui)` to properly scope the styles within the Shadow DOM.
+ * 1. Replace the `:root` selector with `:host(csui)` to properly scope the styles within the Shadow DOM.
  * 2. Convert all `rem` units to pixel values using a fixed base font size, ensuring consistent styling
  *    regardless of the host page's font size.
  */
@@ -39,8 +38,7 @@ export const getStyle = (): HTMLStyleElement => {
 
 const PlasmoOverlay = () => {
   return (
-    <div className="plasmo-z-50 plasmo-flex plasmo-fixed plasmo-top-32 plasmo-right-8">
-      <CountButton />
+    <div className="z-50 flex fixed top-32 right-8">
     </div>
   )
 }
