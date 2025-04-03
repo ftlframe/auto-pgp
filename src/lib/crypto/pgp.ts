@@ -1,4 +1,21 @@
-export async function deriveKey(password, salt) {
+/**
+ * Function to generate a random salt for key derivation
+ * @param length Salt length, default is 16
+ * @returns Return the salt string
+ */
+export function generateSalt(length = 16): string {
+    const array = new Uint8Array(length);
+    crypto.getRandomValues(array);
+    return btoa(String.fromCharCode(...array));
+}
+
+/**
+ * Function that derives the plaintext password using the `PBKDF2` function by default
+ * @param password Plaintext password
+ * @param salt Random generated salt
+ * @returns Derived key that is type of CryptoKey
+ */
+export async function deriveKey(password, salt): Promise<CryptoKey> {
     const encoder = new TextEncoder();
     const keyMaterial = await crypto.subtle.importKey(
         "raw",
@@ -22,17 +39,26 @@ export async function deriveKey(password, salt) {
     );
 }
 
-function getVaultEncoding(vault) {
-
+/**
+ * Gets the vault string encoding
+ * @param vault Vault object
+ * @returns Encoded vault in Uint8Array
+ */
+function getVaultEncoding(vault): Uint8Array {
     let enc = new TextEncoder();
     return enc.encode(vault)
 }
 
+/**
+ * 
+ * @param derivedKey Derived key using 
+ * @param vault 
+ * @returns 
+ */
 export async function encrypt(derivedKey, vault) {
     
     let encoded = getVaultEncoding(JSON.stringify(vault))
     let iv = crypto.getRandomValues(new Uint8Array(12));
-
 
     const encryptedBuffer = await crypto.subtle.encrypt(
         {
@@ -52,7 +78,14 @@ export async function encrypt(derivedKey, vault) {
     };
 }
 
-export async function decrypt(derivedKey, ivBase64, ciphertextBase64) {
+/**
+ * Decryption function to decrypt the encrypted vault.
+ * @param derivedKey Key derived from the plaintext using a random generated salt that was previously generated
+ * @param ivBase64 IV needed to decrypt for AES-GCM
+ * @param ciphertextBase64 Ciphertext in encoded in `base64`
+ * @returns Returns a decoded buffer -> vault was previously stringified to JSON
+ */
+export async function decrypt(derivedKey, ivBase64, ciphertextBase64): Promise<string> {
     // Convert base64 strings back to ArrayBuffers
     const ivUint8 = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
     const encryptedUint8 = Uint8Array.from(atob(ciphertextBase64), c => c.charCodeAt(0));
@@ -71,11 +104,4 @@ export async function decrypt(derivedKey, ivBase64, ciphertextBase64) {
     const dec = new TextDecoder();
     
     return dec.decode(decryptedBuffer);
-}
-
-
-export function generateSalt(length = 16) {
-    const array = new Uint8Array(length);
-    crypto.getRandomValues(array);
-    return btoa(String.fromCharCode(...array));
 }

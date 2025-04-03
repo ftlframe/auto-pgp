@@ -3,15 +3,14 @@ import { useVault } from "~contexts/VaultContext";
 
 export function LoginScreen() {
     const vault = useVault()
-    useEffect(() => {
-    }, []);
+    const isFirstTime = localStorage.getItem('first_time') ? false : true;
 
     const handleSubmit = async (e) => {
 
         // Check for salt in storage if it exists -> not first time
         e.preventDefault();
         try {
-            if (vault.isFirstTime) {
+            if (isFirstTime) {
                 vault.initVault(e.target.password.value)
             }
             else {
@@ -27,7 +26,7 @@ export function LoginScreen() {
     return (
         <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
             <form onSubmit={handleSubmit} className="bg-white shadow-xl rounded-2xl p-6 w-80">
-                {vault.isFirstTime ? (
+                {isFirstTime ? (
                     <div className="mb-4">
                         <p className="text-lg font-semibold text-purple-700">Set the master password...</p>
                         <p className="text-sm text-gray-600">
@@ -49,7 +48,7 @@ export function LoginScreen() {
                     type="submit"
                     className="w-full py-2 text-white bg-purple-600 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-400"
                 >
-                    {vault.isFirstTime ? "Set" : "Unlock"}
+                    {isFirstTime ? "Set" : "Unlock"}
                 </button>
             </form>
         </div>

@@ -6,13 +6,11 @@ import { decrypt, deriveKey, encrypt, generateSalt } from "~lib/crypto/pgp";
 
 export const VaultContext = createContext<{
     isUnlocked: boolean | null,
-    isFirstTime: boolean | null,
     unlockVault: (password: string) => Promise<void>;
     lockVault: (password: string) => Promise<void>;
     initVault: (password: string) => Promise<void>;
 }>({
     isUnlocked: null,
-    isFirstTime: true,
     unlockVault: () => {
         return null;
     },
@@ -30,6 +28,12 @@ export const VaultContext = createContext<{
  */
 export default function VaultProvider({ children }) {
 
+    /**
+     * Basically a `chrome.runtime.sendMessage` wrapper function
+     * @param type Message type
+     * @param data Data thats sent to the background ie. passwords etc...
+     * @returns `chrome.runtime.sendMessage`
+     */
     const sendToBackground = async <T,>(type: string, data?: any): Promise<T> => {
         return chrome.runtime.sendMessage({ type, ...data })
     }
@@ -57,6 +61,8 @@ export default function VaultProvider({ children }) {
 
             setIsFirstTime(false);
             setIsUnlocked(true);
+
+            localStorage.setItem('first_time', 'false')
             console.log("Vault initialized successfully");
         } catch (error) {
             console.error("Vault initialization error:", error);
@@ -65,7 +71,7 @@ export default function VaultProvider({ children }) {
 
 
     /**
-     * Unlocks the vault using AES-GCM with iv decoded from the stored base64
+     * Unlocks the vault using AES-GCM with `iv` decoded from the stored base64
      * @param password plaintext password that gets derived with a salt that's stored in Plasmo storage
      */
     const unlockVault = async (password: string) => {
@@ -77,25 +83,24 @@ export default function VaultProvider({ children }) {
                 error?: string;
                 vault?: string;
             }>("UNLOCK", { password });
+
+
             setIsUnlocked(true);
         } catch (error) {
             console.log(error)
         }
     }
+
     /**
-     * Locks the vault and sends the user to the login screen.
-     * Stores the encrypted vault in place of the decrypted vault.
-     * The default encryption algorithm is AES in CBC mode.
+     * Sends a message to the background worker to lock the vault.
+     * The background worker handles the storage and encryption.
      * @param password plaintext password that gets derived with a salt that's stored in Plasmo storage 
      */
     const lockVault = async (password: string) => {
         try {
-            // 1. We fetch the vault, derive the key and encrypt the vault
-            // Store the iv (needed for AES-GBM) and vault in base64
-            // Clear the decrypted vault stored in state/session storage
 
 
-
+            setIsUnlocked(false);
         } catch (error) {
             console.log(error)
         }
@@ -106,7 +111,6 @@ export default function VaultProvider({ children }) {
 
     const vault = {
         isUnlocked,         // Helper state for child component rendering
-        isFirstTime,        // Helper state to decide if its the first time the user is setting a password
         unlockVault,        // Function that unlocks the vault (the encrypted vault is stored in Base64 in memory)
         lockVault,          // Function that locks the vault (stores the IV and encrypted vault in Base64 in memory)
         initVault,          // Function that initializes the vault in local memory so that it gets destroyed if we destroy the window from the render tree

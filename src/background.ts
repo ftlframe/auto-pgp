@@ -38,11 +38,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 })
 
+/**
+ * A way to securely store the password and salt on login.
+ * The password field and salt field get overwritten.
+ * This is done to ensure security if the JS garbage collector doesn't instantly erase it from memory.
+ * The `deriveKey` function from `pgp.ts` has a `false` flag so that the key isn't exportable.
+ */
 const securePasswordStore = {
     _password: new Uint8Array(),
     _salt: new Uint8Array(),
     _derivedKey: null as CryptoKey | null,
 
+    /**
+     * Function thattakes the plaintext password and salt, derives the key using
+     * crypto functions from `/lib/crypto/pgp.ts` and stores it for future use.
+     * The password and salt field get overwritten as soon as possible.
+     * @param password Plaintext password
+     * @param salt Generated salt
+     */
     async setAndDerive(password: string, salt: string) {
         const encoder = new TextEncoder()
         this._password = encoder.encode(password)
@@ -59,6 +72,10 @@ const securePasswordStore = {
         return this._derivedKey
     },
 
+    /**
+     * Securely wipes and overwrites the data in the fields to
+     * ensure memory safety and to protect against incursions into memory.
+     */
     async wipe() {
         crypto.getRandomValues(this._password)
         crypto.getRandomValues(this._salt)
@@ -71,7 +88,13 @@ const securePasswordStore = {
 }
 
 
-// Core Operations
+/**
+ * Unlocks the vault and stores it in local memory for use.
+ * @param password Plaintext password
+ * @returns a success flag if the operations went good
+ */
+
+// TODO: Try to unlock vault from stored key if it's in there and if it's not will need to reprompt?
 async function handleUnlock(password: string) {
     try {
         const salt = await storage.get("salt")
@@ -84,6 +107,9 @@ async function handleUnlock(password: string) {
         }
 
         const decrypted = await decrypt(securePasswordStore.getKey(), iv, encrypted)
+        
+        // TODO: Remove JSON decrypted vault here
+        
         return { success: true, vault: JSON.parse(decrypted) }
     } catch (err) {
         return { success: false, error: "Decryption failed" }
@@ -146,7 +172,7 @@ async function handleEncrypt(data: unknown) {
 }
 
 
-// Auto-lock utilities
+// TODO: Auto-lock utilities
 // function resetActivityTimer() {
 //     clearTimeout(activityTimeout)
 //     activityTimeout = setTimeout(() => handleLock(), 120_000) // 2 minutes
