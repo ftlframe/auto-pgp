@@ -11,6 +11,9 @@ importers:
       '@plasmohq/storage':
         specifier: ^1.15.0
         version: 1.15.0(react@18.2.0)
+      openpgp:
+        specifier: ^6.1.0
+        version: 6.1.0
       plasmo:
         specifier: 0.90.3
         version: 0.90.3(@swc/core@1.11.15(@swc/helpers@0.5.15))(@swc/helpers@0.5.15)(@types/node@20.11.5)(postcss@8.4.33)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -2661,6 +2664,10 @@ packages:
   onetime@5.1.2:
     resolution: {integrity: sha512-kbpaSSGJTWdAY5KPVeMOKXSrPtr8C8C7wodJbcsd51jRnmD+GZu8Y0VoU6Dm5Z4vWr0Ig/1NKuWRKf7j5aaYSg==}
     engines: {node: '>=6'}
+
+  openpgp@6.1.0:
+    resolution: {integrity: sha512-fRTeitP+hoGJD3kbdUlAI++wE6MvfvXw1rBqHwmBMxIpLjowatJ2zb5ThkORpIkSz5F12wO+xCYRSTbT7M4qKA==}
+    engines: {node: '>= 18.0.0'}
 
   ordered-binary@1.5.3:
     resolution: {integrity: sha512-oGFr3T+pYdTGJ+YFEILMpS3es+GiIbs9h/XQrclBXUtd44ey7XwfsMzM31f64I1SQOawDoDr/D823kNCADI8TA==}
@@ -6034,6 +6041,8 @@ snapshots:
   onetime@5.1.2:
     dependencies:
       mimic-fn: 2.1.0
+
+  openpgp@6.1.0: {}
 
   ordered-binary@1.5.3: {}
 

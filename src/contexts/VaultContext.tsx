@@ -2,13 +2,14 @@ import { createContext, useContext, useEffect, useReducer, useState } from "reac
 import type { Contact, Vault } from "~types/vault";
 import { Storage } from "@plasmohq/storage"
 import { error } from "console";
-import { decrypt, deriveKey, encrypt, generateSalt } from "~lib/crypto/pgp";
+import { decrypt, deriveKey, encrypt, generateSalt } from "~lib/crypto/vault";
 
 export const VaultContext = createContext<{
     isUnlocked: boolean | null,
     unlockVault: (password: string) => Promise<void>;
     lockVault: (password: string) => Promise<void>;
     initVault: (password: string) => Promise<void>;
+    generatePair: (name: string, email: string) => Promise<void>;
 }>({
     isUnlocked: null,
     unlockVault: () => {
@@ -18,6 +19,9 @@ export const VaultContext = createContext<{
         return null
     },
     initVault: () => {
+        return null
+    },
+    generatePair: () => {
         return null
     },
 })
@@ -83,7 +87,7 @@ export default function VaultProvider({ children }) {
                 error?: string;
                 vault?: string;
             }>("UNLOCK", { password });
-
+            console.log(response.error)
 
             setIsUnlocked(true);
         } catch (error) {
@@ -106,7 +110,23 @@ export default function VaultProvider({ children }) {
         }
     }
 
+    const generatePair = async (name: string, email: string) => {
+        try {
+            const response = await sendToBackground<{
+                success: boolean;
+            }>('GENERATE_KEYS', { name, email });
+
+
+        }
+        catch (error) {
+            console.log(error)
+        }
+    }
+
     useEffect(() => {
+        const port = chrome.runtime.connect({ name: "vault-ui" });
+        console.log('Opening port')
+
     }, [])
 
     const vault = {
@@ -114,6 +134,7 @@ export default function VaultProvider({ children }) {
         unlockVault,        // Function that unlocks the vault (the encrypted vault is stored in Base64 in memory)
         lockVault,          // Function that locks the vault (stores the IV and encrypted vault in Base64 in memory)
         initVault,          // Function that initializes the vault in local memory so that it gets destroyed if we destroy the window from the render tree
+        generatePair
     }
 
     return (

@@ -86,22 +86,26 @@ export async function encrypt(derivedKey, vault) {
  * @returns Returns a decoded buffer -> vault was previously stringified to JSON
  */
 export async function decrypt(derivedKey, ivBase64, ciphertextBase64): Promise<string> {
-    // Convert base64 strings back to ArrayBuffers
-    const ivUint8 = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
-    const encryptedUint8 = Uint8Array.from(atob(ciphertextBase64), c => c.charCodeAt(0));
-    
-    // Decrypt the data
-    const decryptedBuffer = await crypto.subtle.decrypt(
-        {
-            name: 'AES-GCM',
-            iv: ivUint8
-        },
-        derivedKey,
-        encryptedUint8
-    );
-    
-    // Convert the decrypted buffer to a string
-    const dec = new TextDecoder();
-    
-    return dec.decode(decryptedBuffer);
+    try {
+        // Convert base64 strings back to ArrayBuffers
+        const ivUint8 = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+        const encryptedUint8 = Uint8Array.from(atob(ciphertextBase64), c => c.charCodeAt(0));
+        // Decrypt the data
+        const decryptedBuffer = await crypto.subtle.decrypt(
+            {
+                name: 'AES-GCM',
+                iv: ivUint8
+            },
+            derivedKey as CryptoKey,
+            encryptedUint8
+        );
+        
+        // Convert the decrypted buffer to a string
+        const dec = new TextDecoder();
+        
+        return dec.decode(decryptedBuffer);
+    }
+    catch(error) {
+        console.log(error)
+    }
 }
