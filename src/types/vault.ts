@@ -3,6 +3,7 @@ export interface KeyPair {
     fingerprint: string;
     publicKey: string;
     encryptedPrivateKey: string; // Encrypted with derived key
+    iv: string;
 }
 
 export interface Contact {

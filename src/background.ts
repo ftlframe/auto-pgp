@@ -6,6 +6,8 @@ import type { KeyPair, Vault } from "~types/vault"
 const storage = new Storage({
     area: 'local'
 })
+
+
 let activityTimeout: NodeJS.Timeout
 /**
  * TODO:
@@ -21,6 +23,11 @@ chrome.runtime.onConnect.addListener((port) => {
         console.log("Vault popup opened");
 
         port.onDisconnect.addListener(() => {
+            /**
+             * TODO: Edge case
+             * User sets master password and then closes?
+             * This throws an error that the vault is locked because of how the init of the vault is handled
+             */
             console.log("Vault popup closed");
             handleLock().catch((err) => console.error("Failed to auto-lock vault:", err));
         });
@@ -66,8 +73,63 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return true;
         }
 
+        case "GET_KEYS": {
+            return true;
+        }
+
+        case "DELETE_KEY": {
+            return true;
+        }
+
+        /**
+         * ==================
+         * Contact operations
+         * ==================
+         */
+
+        case "ADD_CONTACT": {
+            return true;
+        }
+        
+        case "GET_CONTACTS" : {
+            return true;
+        }
+
+        case "DELETE_CONTACT": {
+            return true;
+        }
+
+        /**
+         * ==================
+         * Content script messages
+         * ==================
+         */
+
+        case "GMAIL_EMAIL_DETECTED": {
+            const userEmail = request.email
+            globalVars.setEmail(userEmail);
+        }
+
+        case "PGP_ENCRYPT_REQUEST": {
+            console.log(request.payload.recipients)
+            console.log(request.payload.content)
+        }
+
     }
 })
+
+
+const globalVars = {
+    _email: "",
+
+    getEmail() {
+        return this._email;
+    },
+    setEmail(email: string) {
+        this._email = email;
+    }
+}
+
 
 /**
  * A way to securely store the password and salt on login.
@@ -132,11 +194,10 @@ const securePasswordStore = {
 
 /**
  * Unlocks the vault and stores it in local memory for use.
+ * TODO: Try to unlock vault from stored key if it's in there and if it's not will need to reprompt?
  * @param password Plaintext password
  * @returns a success flag if the operations went good
  */
-
-// TODO: Try to unlock vault from stored key if it's in there and if it's not will need to reprompt?
 async function handleUnlock(password: string) {
     try {
         console.log("Unlocking vault")
@@ -156,7 +217,6 @@ async function handleUnlock(password: string) {
 
         console.log('Setting vault in memory...')
         securePasswordStore.setVault(JSON.parse(decrypted));
-        // TODO: Remove JSON decrypted vault here
 
         return { success: true, error: null }
     } catch (err) {
@@ -221,31 +281,31 @@ async function handleEncrypt(vault: any) {
     return { success: true }
 }
 
-
+/**
+ * Puts a newly generated key pair into the vault based on identity.
+ * The private key gets encrypted with the derived key and salt
+ * @param name Identity parameter
+ * @param email Identity parameter
+ */
 async function handleKeyGenerate(name: string, email: string) {
-    console.log(securePasswordStore.getVault())
     if (!securePasswordStore._derivedKey) {
         console.log('Re-enter password!')
         return;
     }
 
     const { publicKey, privateKey } = await generatePGPKeyPair(name, email)
-    const keyPair: KeyPair = {
-        fingerprint: email,
-        publicKey: publicKey,
-        encryptedPrivateKey: privateKey
-    }
+
+    const cipher = await encrypt(securePasswordStore.getKey(), privateKey)
 
     const vault = securePasswordStore.getVault() as Vault
     vault.keyPairs.push({
         fingerprint: email,
         publicKey: publicKey,
-        encryptedPrivateKey: privateKey
+        encryptedPrivateKey: cipher.ciphertext,
+        iv: cipher.iv 
     })
-
-    securePasswordStore.setVault(vault)
     console.log(securePasswordStore.getVault())
-
+    securePasswordStore.setVault(vault)
 }
 
 

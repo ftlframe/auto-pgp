@@ -3,7 +3,7 @@ export default function ContactTab() {
         <div className="bg-white rounded-xl shadow-sm">
             {/* Contacts Content */}
             <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-                <h2 className="text-lg font-semibold">Shared Contacts</h2>
+                <h2 className="text-lg font-semibold">Add Contact</h2>
                 <button className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">
                     Add Contact
                 </button>

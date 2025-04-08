@@ -1,10 +1,14 @@
+import { useVault } from "~contexts/VaultContext";
+
 export default function KeysTab() {
+    const vault = useVault();
     return (
         <div className="bg-white rounded-xl shadow-sm">
             {/* Keys Content */}
             <div className="p-6 border-b border-gray-200 flex justify-between items-center">
                 <h2 className="text-lg font-semibold">Security Keys</h2>
-                <button className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">
+                <button className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+                onClick={() => {vault.generatePair('name', 'name@domain.com')}}>
                     Add Key
                 </button>
             </div>
