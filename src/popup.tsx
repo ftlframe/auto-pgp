@@ -7,15 +7,18 @@ import { MainLayout } from "~components/layout/MainLayout";
 
 function IndexPopupContent() {
   const { isUnlocked } = useVault();
-  return isUnlocked ? <MainLayout/> : <LoginScreen/>
+  return isUnlocked ? <MainLayout /> : <LoginScreen />
 }
 
 function IndexPopup() {
 
   return (
-    <VaultProvider>
-      <IndexPopupContent/>
-    </VaultProvider>
+    <div className="w-[500px] h-[300px]">
+      <VaultProvider>
+        <IndexPopupContent />
+      </VaultProvider>
+
+    </div>
   )
 }
 

@@ -2,6 +2,20 @@ import { useEffect } from "react"
 import { createRoot } from "react-dom/client"
 import cssText from "data-text:~style.css"
 
+const extractEmailFromTitle = () => {
+  const title = document.querySelector('title');
+  // Common Gmail title formats:
+  // 1. "Inbox (30,034) - name@gmail.com - Gmail"
+  // 2. "name@gmail.com - Gmail"
+  // 3. "Starred - name@gmail.com - Gmail"
+  const emailRegex = /(?:^| - )([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?= - Gmail|$)/;
+  const match = title.textContent.match(emailRegex);
+  chrome.runtime.sendMessage({
+    type: 'SET_EMAIL',
+    payload: { email: match[1] }
+  })
+};
+
 const PGPButton = () => {
   const handleClick = () => {
     // Get email content
@@ -23,7 +37,7 @@ const PGPButton = () => {
     // Send the content and recipients to the background script
     chrome.runtime.sendMessage({
       type: "PGP_ENCRYPT_REQUEST",
-      payload: { content, recipients }
+      payload: { content, recipients}
     })
   }
 
@@ -139,6 +153,7 @@ if (document.readyState === "complete") {
   window.addEventListener("load", () => {
     observeComposeWindow()
     injectStylesheet()
+    extractEmailFromTitle()
   })
 }
 

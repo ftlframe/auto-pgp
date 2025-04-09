@@ -55,9 +55,9 @@ function getVaultEncoding(vault): Uint8Array {
  * @param vault 
  * @returns 
  */
-export async function encrypt(derivedKey, vault) {
+export async function encrypt(derivedKey, data) {
     
-    let encoded = getVaultEncoding(JSON.stringify(vault))
+    let encoded = getVaultEncoding(typeof data === 'string' ? data : JSON.stringify(data))
     let iv = crypto.getRandomValues(new Uint8Array(12));
 
     const encryptedBuffer = await crypto.subtle.encrypt(

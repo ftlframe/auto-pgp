@@ -1,17 +1,20 @@
 import { createContext, useContext, useEffect, useReducer, useState } from "react";
 import type { Contact, Vault } from "~types/vault";
 import { Storage } from "@plasmohq/storage"
-import { error } from "console";
+import { error, log } from "console";
 import { decrypt, deriveKey, encrypt, generateSalt } from "~lib/crypto/vault";
 
 export const VaultContext = createContext<{
     isUnlocked: boolean | null,
+    email: string | null,
     unlockVault: (password: string) => Promise<void>;
     lockVault: (password: string) => Promise<void>;
     initVault: (password: string) => Promise<void>;
-    generatePair: (name: string, email: string) => Promise<void>;
+    generatePair: (email: string) => Promise<void>;
+    getEmail: () => Promise<void>;
 }>({
     isUnlocked: null,
+    email: null,
     unlockVault: () => {
         return null;
     },
@@ -24,6 +27,10 @@ export const VaultContext = createContext<{
     generatePair: () => {
         return null
     },
+    getEmail: () => {
+        return null
+    },
+
 })
 
 /**
@@ -46,7 +53,7 @@ export default function VaultProvider({ children }) {
     // Lock state of vault and salt
     const [isUnlocked, setIsUnlocked] = useState(false);
     const [isFirstTime, setIsFirstTime] = useState(true);
-
+    const [email, setEmail] = useState('');
     /**
      * Used to initialize the vault on first start...
      * We try to fetch the vault and if it's already initialized our work is done...
@@ -87,8 +94,6 @@ export default function VaultProvider({ children }) {
                 error?: string;
                 vault?: string;
             }>("UNLOCK", { password });
-            console.log(response.error)
-
             setIsUnlocked(true);
         } catch (error) {
             console.log(error)
@@ -102,7 +107,9 @@ export default function VaultProvider({ children }) {
      */
     const lockVault = async (password: string) => {
         try {
-
+            await sendToBackground<{
+                response: any
+            }>('LOCK')
 
             setIsUnlocked(false);
         } catch (error) {
@@ -110,11 +117,11 @@ export default function VaultProvider({ children }) {
         }
     }
 
-    const generatePair = async (name: string, email: string) => {
+    const generatePair = async (email: string) => {
         try {
             const response = await sendToBackground<{
                 success: boolean;
-            }>('GENERATE_KEYS', { name, email });
+            }>('GENERATE_KEYS', { email });
 
 
         }
@@ -123,18 +130,31 @@ export default function VaultProvider({ children }) {
         }
     }
 
+    const getEmail = async () => {
+        try {
+            const response = await sendToBackground<{
+                email: string;
+            }>('GET_EMAIL')
+
+            setEmail(response.email);
+        } catch (error) {
+            console.log(error);            
+        }
+    }
+
     useEffect(() => {
         const port = chrome.runtime.connect({ name: "vault-ui" });
         console.log('Opening port')
-
     }, [])
 
     const vault = {
         isUnlocked,         // Helper state for child component rendering
+        email,
         unlockVault,        // Function that unlocks the vault (the encrypted vault is stored in Base64 in memory)
         lockVault,          // Function that locks the vault (stores the IV and encrypted vault in Base64 in memory)
         initVault,          // Function that initializes the vault in local memory so that it gets destroyed if we destroy the window from the render tree
-        generatePair
+        generatePair,
+        getEmail,
     }
 
     return (

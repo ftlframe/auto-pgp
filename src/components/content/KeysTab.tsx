@@ -1,15 +1,47 @@
+import { useState } from "react";
+import KeysModal from "~components/modals/KeysModal";
 import { useVault } from "~contexts/VaultContext";
 
 export default function KeysTab() {
     const vault = useVault();
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [activeModal, setActiveModal] = useState(null);
+
+    const openModal = (action) => {
+        setActiveModal(action);
+        setIsModalOpen(true);
+    };
+
+    const closeModal = () => {
+        setIsModalOpen(false);
+        setActiveModal(null);
+    };
     return (
         <div className="bg-white rounded-xl shadow-sm">
             {/* Keys Content */}
-            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-                <h2 className="text-lg font-semibold">Security Keys</h2>
-                <button className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
-                onClick={() => {vault.generatePair('name', 'name@domain.com')}}>
-                    Add Key
+            <h2 className="text-lg font-semibold">Key operations</h2>
+            <div className="border-b border-gray-200 flex justify-between items-center">
+                <button
+                    className="w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+                    onClick={() => openModal('Generate')}
+                >
+                    Generation wizard
+                </button>
+            </div>
+            <div className="border-b border-gray-200 flex justify-between items-center">
+                <button
+                    className="w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+                    onClick={() => openModal('Revoke')}
+                >
+                    Revoke key
+                </button>
+            </div>
+            <div className="border-b border-gray-200 flex justify-between items-center">
+                <button
+                    className="w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+                    onClick={() => openModal('Import/export')}
+                >
+                    Import/export wizard
                 </button>
             </div>
             <div className="divide-y divide-gray-200">
@@ -22,6 +54,12 @@ export default function KeysTab() {
                     <span className="text-sm text-purple-600">Active</span>
                 </div>
             </div>
+            <KeysModal
+                isOpen={isModalOpen}
+                onClose={closeModal}
+                action={activeModal}
+                keys={[]}
+            />
         </div>
     );
 }

@@ -1,15 +1,25 @@
-import { useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import ContactTab from "~components/content/ContactsTab";
 import KeysTab from "~components/content/KeysTab";
 import { OverviewTab } from "~components/content/OverviewTabs";
+import { useVault } from "~contexts/VaultContext";
 
 export function MainLayout() {
     const [activeTab, setActiveTab] = useState('overview')
+    const vault = useVault()
+    useEffect(() => {
+        async function getter() {
+
+            await vault.getEmail()
+        }
+
+        getter();
+    }, []) 
     return (
         <div className="rounded-lg">
             <header className="bg-white shadow-sm">
                 <div className="max-w-4xl mx-auto px-4 py-4">
-                    <h1 className="text-2xl font-bold text-purple-600 mb-4">Auto-PGP</h1>
+                    <h1 className="text-2xl font-bold text-purple-600 mb-4">Auto-PGP { vault.email !== ''? '- ' + vault.email: ' - /'}</h1>
                     <nav className="flex space-x-8">
                         <button
                             className={`pb-2 px-1 ${activeTab === 'overview'

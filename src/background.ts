@@ -1,7 +1,7 @@
 import { Storage } from "@plasmohq/storage"
 import { generatePGPKeyPair } from "~lib/crypto/keys"
 import { deriveKey, encrypt, decrypt, generateSalt } from "~lib/crypto/vault"
-import type { KeyPair, Vault } from "~types/vault"
+import type { Contact, KeyPair, Vault, VaultEntry } from "~types/vault"
 
 const storage = new Storage({
     area: 'local'
@@ -30,6 +30,7 @@ chrome.runtime.onConnect.addListener((port) => {
              */
             console.log("Vault popup closed");
             handleLock().catch((err) => console.error("Failed to auto-lock vault:", err));
+            // Change the email back to an empty string
         });
     }
 });
@@ -63,13 +64,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return true;
         }
         /**
+         * =================
+         * Helper functions
+         * =================
+         */
+
+        case "SET_EMAIL": {
+            console.log('SET_EMAIL')
+            globalVars.setEmail(request.payload.email)
+            return true;
+        }
+        case "GET_EMAIL": {
+            console.log('GET_EMAIL')
+            console.log(globalVars.getEmail())
+
+            handleSendEmail().then(sendResponse)
+            return true;
+        }
+        /**
          * ==================
          * Key operations
          * ==================
          */
 
         case "GENERATE_KEYS": {
-            handleKeyGenerate(request.name, request.email).then(sendResponse)
+            handleKeyGenerate(request.email).then(sendResponse)
             return true;
         }
 
@@ -90,8 +109,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         case "ADD_CONTACT": {
             return true;
         }
-        
-        case "GET_CONTACTS" : {
+
+        case "GET_CONTACTS": {
             return true;
         }
 
@@ -118,6 +137,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 })
 
+async function handleSendEmail() {
+    const _email = globalVars.getEmail()
+    return { email: _email }
+}
 
 const globalVars = {
     _email: "",
@@ -200,27 +223,65 @@ const securePasswordStore = {
  */
 async function handleUnlock(password: string) {
     try {
-        console.log("Unlocking vault")
+        console.log('Unlocking vault');
 
-        const salt = await storage.get("salt")
-        const key = await securePasswordStore.setAndDerive(password, salt);
-        const encrypted = await storage.get("vault")
-        const iv = await storage.get("iv")
+        const salt = await storage.get("salt");
+        await securePasswordStore.setAndDerive(password, salt);
+        const encrypted = await storage.get("vault");
+        const iv = await storage.get("iv");
 
         if (!encrypted || !iv) {
-            return { success: false, error: "No vault found" }
+            return { success: false, error: "No vault found" };
         }
 
-        console.log('Decrypting...')
-        console.log(`${securePasswordStore.getKey() instanceof CryptoKey}`)
-        const decrypted = await decrypt(securePasswordStore.getKey() as CryptoKey, iv, encrypted)
+        const decrypted = await decrypt(
+            securePasswordStore.getKey() as CryptoKey,
+            iv,
+            encrypted
+        );
 
-        console.log('Setting vault in memory...')
-        securePasswordStore.setVault(JSON.parse(decrypted));
+        // Only parse once now
+        const parsed = JSON.parse(decrypted);
+        console.log("Decrypted vault:", parsed);
 
-        return { success: true, error: null }
+        const reconstructedVault: Vault = {
+            vault: new Map<string, VaultEntry>()
+        };
+
+        // Reconstruct the vault structure
+        if (parsed.vault && Array.isArray(parsed.vault)) {
+            for (const [email, entryData] of parsed.vault) {
+                const vaultEntry: VaultEntry = {
+                    keyPairs: new Map<string, KeyPair>(),
+                    contacts: new Map<string, Contact>()
+                };
+
+                if (entryData.keyPairs && Array.isArray(entryData.keyPairs)) {
+                    for (const [keyId, keyPair] of entryData.keyPairs) {
+                        vaultEntry.keyPairs.set(keyId, {
+                            ...keyPair,
+                            dateCreated: new Date(keyPair.dateCreated),
+                            dateExpire: keyPair.dateExpire ? new Date(keyPair.dateExpire) : null
+                        });
+                    }
+                }
+
+                if (entryData.contacts && Array.isArray(entryData.contacts)) {
+                    for (const [contactId, contact] of entryData.contacts) {
+                        vaultEntry.contacts.set(contactId, contact);
+                    }
+                }
+                
+                reconstructedVault.vault.set(email, vaultEntry);
+            }
+        }
+        console.log(reconstructedVault);
+        
+        securePasswordStore.setVault(reconstructedVault);
+        return { success: true, error: null };
     } catch (err) {
-        return { success: false, error: "Decryption failed" }
+        console.error("Unlock failed:", err);
+        return { success: false, error: "Decryption failed" };
     }
 }
 /**
@@ -246,17 +307,30 @@ async function handleInit(password: string) {
 
     await securePasswordStore.setAndDerive(password, salt);
 
-    const emptyVault = {
-        keyPairs: [],
-        contacts: []
-    }
+    // Create an empty vault structure using the Map-based approach
+    const emptyVault: Vault = {
 
-    const ciphertext = await encrypt(securePasswordStore.getKey(), emptyVault)
+        vault: new Map<string, VaultEntry>()
+
+    };
+
+    // Convert Map to serializable format
+    const serializableVault = {
+        vault: Array.from(emptyVault.vault.entries())
+    };
+
+    const ciphertext = await encrypt(
+        securePasswordStore.getKey(),
+        JSON.stringify(serializableVault)
+    );
 
     await storage.set('salt', salt)
     await storage.set('iv', ciphertext.iv);
     await storage.set('vault', ciphertext.ciphertext);
 
+    securePasswordStore.setVault(emptyVault)
+
+    console.log(`Initialized vault ${emptyVault}`)
     return {
         success: true,
         error: null,
@@ -264,21 +338,41 @@ async function handleInit(password: string) {
 }
 
 async function handleLock() {
-    console.log(securePasswordStore.getVault())
     await handleEncrypt(securePasswordStore.getVault())
     securePasswordStore.wipe();
     // await storage.clear()
     return { success: true }
 }
 
-async function handleEncrypt(vault: any) {
-    if (!securePasswordStore.getKey()) throw new Error("Vault locked")
+async function handleEncrypt(vault: Vault) {
+    try {
+        if (!securePasswordStore.getKey()) throw new Error("Vault locked");
 
-    const encrypted = await encrypt(securePasswordStore.getKey(), vault)
-    await storage.set("vault", encrypted.ciphertext)
-    await storage.set("iv", encrypted.iv)
+        // Convert to serializable format (only once)
+        const serializableVault = {
+            vault: Array.from(vault.vault.entries()).map(([email, entry]) => [
+                email,
+                {
+                    keyPairs: Array.from(entry.keyPairs.entries()),
+                    contacts: Array.from(entry.contacts.entries())
+                }
+            ])
+        };
 
-    return { success: true }
+        // Stringify only once here
+        const encrypted = await encrypt(
+            securePasswordStore.getKey(),
+            JSON.stringify(serializableVault) // Single stringification
+        );
+
+        await storage.set("vault", encrypted.ciphertext);
+        await storage.set("iv", encrypted.iv);
+
+        return { success: true };
+    } catch (error) {
+        console.error("Encryption failed:", error);
+        return { success: false, error: "Encryption failed" };
+    }
 }
 
 /**
@@ -287,25 +381,52 @@ async function handleEncrypt(vault: any) {
  * @param name Identity parameter
  * @param email Identity parameter
  */
-async function handleKeyGenerate(name: string, email: string) {
+async function handleKeyGenerate(email: string = '') {
     if (!securePasswordStore._derivedKey) {
-        console.log('Re-enter password!')
+        console.log('Re-enter password!');
         return;
     }
 
-    const { publicKey, privateKey } = await generatePGPKeyPair(name, email)
+    // Assume generatePGPKeyPair now returns fingerprint
+    const { publicKey, privateKey, fingerprint } = await generatePGPKeyPair(email);
 
-    const cipher = await encrypt(securePasswordStore.getKey(), privateKey)
+    const cipher = await encrypt(securePasswordStore.getKey(), privateKey);
 
-    const vault = securePasswordStore.getVault() as Vault
-    vault.keyPairs.push({
-        fingerprint: email,
+    const fetchedVault = securePasswordStore.getVault() as Vault;
+    console.log('Fetched vault')
+    console.log(fetchedVault)
+
+    if (!fetchedVault.vault) {
+        fetchedVault.vault = new Map<string, VaultEntry>();
+    }
+
+    const fetchedEmail = email === '' ? globalVars.getEmail() : email;
+
+    // Get or create vault entry
+    let vaultEntry = fetchedVault.vault.get(fetchedEmail);
+    if (!vaultEntry) {
+        vaultEntry = {
+            keyPairs: new Map<string, KeyPair>(),
+            contacts: new Map<string, Contact>()
+        };
+        fetchedVault.vault.set(fetchedEmail, vaultEntry);
+    }
+
+    // Create new key pair with proper fingerprint
+    const keyPair: KeyPair = {
+        fingerprint: fingerprint,  // Use actual key fingerprint
         publicKey: publicKey,
         encryptedPrivateKey: cipher.ciphertext,
-        iv: cipher.iv 
-    })
-    console.log(securePasswordStore.getVault())
-    securePasswordStore.setVault(vault)
+        iv: cipher.iv,
+        dateCreated: new Date(),
+        dateExpire: null
+    };
+
+    // Add to correct vault entry
+    vaultEntry.keyPairs.set(crypto.randomUUID(), keyPair);
+
+    securePasswordStore.setVault(fetchedVault);
+    console.log('Updated vault:', securePasswordStore.getVault());
 }
 
 
