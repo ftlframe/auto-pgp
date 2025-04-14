@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useReducer, useState } from "react";
-import type { Contact, Vault } from "~types/vault";
+import type { Contact, KeyPair, Vault } from "~types/vault";
 import { Storage } from "@plasmohq/storage"
 import { error, log } from "console";
 import { decrypt, deriveKey, encrypt, generateSalt } from "~lib/crypto/vault";
@@ -7,14 +7,18 @@ import { decrypt, deriveKey, encrypt, generateSalt } from "~lib/crypto/vault";
 export const VaultContext = createContext<{
     isUnlocked: boolean | null,
     email: string | null,
+    userKeys: [] | null,
     unlockVault: (password: string) => Promise<void>;
     lockVault: (password: string) => Promise<void>;
     initVault: (password: string) => Promise<void>;
     generatePair: (email: string) => Promise<void>;
     getEmail: () => Promise<void>;
+    getKeys: () => Promise<void>;
+    deleteKey: (keyID: string) => Promise<void>;
 }>({
     isUnlocked: null,
     email: null,
+    userKeys: null,
     unlockVault: () => {
         return null;
     },
@@ -30,7 +34,12 @@ export const VaultContext = createContext<{
     getEmail: () => {
         return null
     },
-
+    getKeys: () => {
+        return null
+    },
+    deleteKey: () => {
+        return null
+    },
 })
 
 /**
@@ -49,11 +58,16 @@ export default function VaultProvider({ children }) {
         return chrome.runtime.sendMessage({ type, ...data })
     }
 
-
-    // Lock state of vault and salt
     const [isUnlocked, setIsUnlocked] = useState(false);
-    const [isFirstTime, setIsFirstTime] = useState(true);
     const [email, setEmail] = useState('');
+    const [userKeys, setUserKeys] = useState(null)
+
+    /**
+     * ================
+     * Vault operations
+     * ================
+     */
+
     /**
      * Used to initialize the vault on first start...
      * We try to fetch the vault and if it's already initialized our work is done...
@@ -70,7 +84,6 @@ export default function VaultProvider({ children }) {
                 throw new Error(response.error || "Vault initialization failed");
             }
 
-            setIsFirstTime(false);
             setIsUnlocked(true);
 
             localStorage.setItem('first_time', 'false')
@@ -94,7 +107,10 @@ export default function VaultProvider({ children }) {
                 error?: string;
                 vault?: string;
             }>("UNLOCK", { password });
-            setIsUnlocked(true);
+            if(response.success)
+                setIsUnlocked(true);
+            else
+                alert(response.error)
         } catch (error) {
             console.log(error)
         }
@@ -117,18 +133,10 @@ export default function VaultProvider({ children }) {
         }
     }
 
-    const generatePair = async (email: string) => {
-        try {
-            const response = await sendToBackground<{
-                success: boolean;
-            }>('GENERATE_KEYS', { email });
+    /**
+    * ----------------------------------------------------------------
+    */
 
-
-        }
-        catch (error) {
-            console.log(error)
-        }
-    }
 
     const getEmail = async () => {
         try {
@@ -138,9 +146,61 @@ export default function VaultProvider({ children }) {
 
             setEmail(response.email);
         } catch (error) {
-            console.log(error);            
+            console.log(error);
         }
     }
+
+    /**
+    * ----------------------------------------------------------------
+    */
+
+    /**
+     * ==============
+     * Key operations
+     * ==============
+     */
+
+    const generatePair = async (email: string) => {
+        try {
+            const response = await sendToBackground<{
+                success: boolean;
+            }>('GENERATE_KEYS', { email });
+
+            await getKeys()
+        }
+        catch (error) {
+            console.log(error)
+        }
+    }
+
+    const getKeys = async () => {
+        try {
+            const response = await sendToBackground<{
+                success: string;
+                keys: PublicKeyInfo[]
+            }>('GET_KEYS')
+
+            setUserKeys(response.keys)
+        } catch (error) {
+            console.error(error)
+        }
+    }
+
+    const deleteKey = async (keyId: string) => {
+        try {
+            const response = await sendToBackground<{
+                success: string;
+                error?: string;
+            }>('DELETE_KEY', {keyId, email})
+
+            await getKeys();
+        } catch (error) {
+            
+        }
+    }
+    /**
+    * ----------------------------------------------------------------
+    */
 
     useEffect(() => {
         const port = chrome.runtime.connect({ name: "vault-ui" });
@@ -149,12 +209,24 @@ export default function VaultProvider({ children }) {
 
     const vault = {
         isUnlocked,         // Helper state for child component rendering
-        email,
+        email,              // Helper state for email rendering
+        userKeys,           // Helper state to store the keys for the email
+        /**
+         * Vault ops
+         */
         unlockVault,        // Function that unlocks the vault (the encrypted vault is stored in Base64 in memory)
         lockVault,          // Function that locks the vault (stores the IV and encrypted vault in Base64 in memory)
         initVault,          // Function that initializes the vault in local memory so that it gets destroyed if we destroy the window from the render tree
-        generatePair,
-        getEmail,
+        /**
+         * Key ops
+         */
+        generatePair,       // Function that generates a key pair for the email and stores it in the map
+        getKeys,            // Function that gets the keys for the email
+        deleteKey,
+        /**
+         * Helper ops
+         */
+        getEmail,           // Function that gets the displayed email from the background/content and stores it in state
     }
 
     return (

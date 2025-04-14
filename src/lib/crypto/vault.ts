@@ -107,5 +107,6 @@ export async function decrypt(derivedKey, ivBase64, ciphertextBase64): Promise<s
     }
     catch(error) {
         console.log(error)
+        return null;
     }
 }

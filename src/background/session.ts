@@ -1,5 +1,4 @@
 import { securePasswordStore, handleEncryptAndStoreVault } from "./vault";
-import { globalVars } from "./userState";
 
 let activityTimeout: NodeJS.Timeout | null = null;
 const AUTO_LOCK_TIMEOUT_MS = 120_000; // 2 minutes
@@ -20,7 +19,7 @@ export async function handleLock() {
         console.log("Vault already locked or not loaded, wiping credentials only.");
     }
     await securePasswordStore.wipe();
-    globalVars.clearEmail(); // Also clear email on lock
+    // globalVars.clearEmail(); // Also clear email on lock
     clearTimeout(activityTimeout as NodeJS.Timeout); // Clear timer on manual lock
     activityTimeout = null;
     console.log("Vault locked and credentials wiped.");

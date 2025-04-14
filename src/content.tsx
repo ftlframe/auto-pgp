@@ -1,4 +1,3 @@
-import { useEffect } from "react"
 import { createRoot } from "react-dom/client"
 import cssText from "data-text:~style.css"
 

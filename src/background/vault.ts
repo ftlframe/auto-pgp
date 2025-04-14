@@ -84,6 +84,9 @@ export async function handleUnlock(password: string) {
         }
 
         const decrypted = await decrypt(derivedKey, iv, encrypted);
+        if(decrypted === null) {
+            return { success: false, error: 'Bad password!' }
+        }
         const parsed = JSON.parse(decrypted); // Assuming decrypt returns string
 
         // Reconstruct the vault structure with Maps
@@ -120,7 +123,6 @@ export async function handleUnlock(password: string) {
         securePasswordStore.setVault(reconstructedVault);
 
         console.log("Vault unlocked and loaded into memory.");
-        console.log(securePasswordStore.getVault())
         return { success: true, error: null };
 
     } catch (err) {

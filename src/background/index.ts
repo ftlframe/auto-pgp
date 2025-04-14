@@ -15,7 +15,6 @@ chrome.runtime.onConnect.addListener((port) => {
         console.log("Vault popup opened");
         port.onDisconnect.addListener(() => {
             console.log("Vault popup closed");
-            // TODO: Handle edge case mentioned in original code
             handleLock().catch((err) => console.error("Failed to auto-lock vault:", err));
         });
     }

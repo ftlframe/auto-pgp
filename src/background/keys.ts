@@ -59,7 +59,6 @@ export async function handleKeyGenerate(emailParam?: string) {
         securePasswordStore.setVault(currentVault);
 
         console.log(`Successfully generated and added key ${keyId} for ${email}.`);
-        // TODO: Consider triggering an auto-save/encrypt here or rely on lock/close
         // await handleEncryptAndStoreVault(); // Optional: Save immediately
 
         return { success: true, fingerprint: keyId };
@@ -70,12 +69,15 @@ export async function handleKeyGenerate(emailParam?: string) {
     }
 }
 
+/**
+ * Function to return keys with basic info to the front
+ * @param email User email, uses the stored one by default
+ * @returns Returns the keys without any sensitive info
+ */
 export async function handleGetKeys(email?: string) {
-    // TODO: Implement logic to retrieve keys for a specific email (or all if email is omitted)
     // Ensure vault is unlocked.
     // Decrypt private keys ONLY if explicitly needed and handle securely.
     // Return public keys, fingerprints, dates etc.
-    console.warn("handleGetKeys not implemented");
     const currentVault = securePasswordStore.getVault();
     const targetEmail = email || globalVars.getEmail();
 
@@ -97,20 +99,22 @@ export async function handleGetKeys(email?: string) {
 
     return { success: true, keys: keys };
 }
+/**
+ * Find the key by email and keyId (fingerprint/UUID) and removes it from the map
+ * @param keyId Keys unique fingerprint
+ * @param email User email, uses the stored email by default
+ * @returns Response to the front
+ */
+export async function handleDeleteKey(keyId: string, email?: string) {
 
-export async function handleDeleteKey(email: string, keyId: string) {
-    // TODO: Implement logic to delete a specific key pair.
-    // Ensure vault is unlocked.
-    // Find the key by email and keyId (fingerprint/UUID).
-    // Remove it from the map.
-    // Update the vault in securePasswordStore.
     // Consider triggering an auto-save/encrypt.
-    console.warn("handleDeleteKey not implemented");
     const currentVault = securePasswordStore.getVault();
+    const targetEmail = email || globalVars.getEmail();
+
     if (!currentVault || !securePasswordStore.getKey()) {
         return { success: false, error: "Vault locked" };
     }
-    const entry = currentVault.vault.get(email);
+    const entry = currentVault.vault.get(targetEmail);
     if (entry && entry.keyPairs.has(keyId)) {
         entry.keyPairs.delete(keyId);
         securePasswordStore.setVault(currentVault);

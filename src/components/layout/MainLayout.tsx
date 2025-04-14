@@ -9,7 +9,7 @@ export function MainLayout() {
     const vault = useVault()
     useEffect(() => {
         async function getter() {
-
+            await vault.getKeys()
             await vault.getEmail()
         }
 
@@ -51,7 +51,7 @@ export function MainLayout() {
                     </nav>
                 </div>
             </header>
-            <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-6">
+            <main className="flex-1 max-w-4xl mx-auto w-full ">
                 {activeTab === 'overview' && <OverviewTab/>}
 
                 {activeTab === 'keys' && <KeysTab/>}

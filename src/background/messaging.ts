@@ -46,8 +46,7 @@ export function routeMessage(request: any, sender: chrome.runtime.MessageSender,
             return true;
 
         // Note: ENCRYPT_DATA might be better handled internally by LOCK or auto-save
-        // If it's meant for encrypting *arbitrary* data with the vault key, reconsider security.
-        // Assuming it meant "save current vault state"
+        // It's meant to "save current vault state"
         case "ENCRYPT_STORE_VAULT": // Renamed for clarity
             handleEncryptAndStoreVault().then(sendResponse);
             return true;
@@ -83,7 +82,7 @@ export function routeMessage(request: any, sender: chrome.runtime.MessageSender,
             return true;
 
         case "DELETE_KEY":
-            handleDeleteKey(request.email, request.keyId).then(sendResponse);
+            handleDeleteKey(request.keyId, request.email).then(sendResponse);
             return true;
 
         /**

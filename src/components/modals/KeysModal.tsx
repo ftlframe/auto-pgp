@@ -1,6 +1,8 @@
 import { useVault } from "~contexts/VaultContext";
+import { formatDate } from "~lib/utils";
 
-export default function KeysModal({ isOpen, onClose, action, keys }) {
+export default function KeysModal({ isOpen, onClose, action }) {
+    const userKeys = useVault().userKeys as PublicKeyInfo[];
     const vault = useVault();
     if (!isOpen) return null;
 
@@ -28,24 +30,22 @@ export default function KeysModal({ isOpen, onClose, action, keys }) {
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
-                                        {action !== 'add' && (
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                                        )}
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fingerprint</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date created</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date expires</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {keys.map((key) => (
-                                        <tr key={key.id}>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{key.fingerprint}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{key.email}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{key.phone}</td>
+                                    {userKeys.map((key) => (
+                                        <tr key={key.fingerprint}>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">...{key.fingerprint?.slice(-16) ?? 'N/A'}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(key.dateCreated)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(key.dateExpire)}</td>
                                             {action !== 'add' && (
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    <button className={`mr-2 ${action === 'edit' ? 'text-blue-600 hover:text-blue-800' : 'text-red-600 hover:text-red-800'}`}>
-                                                        {action === 'edit' ? 'Edit' : 'Delete'}
+                                                    <button className={`mr-2 text-blue-600 hover:text-blue-800`}>
+                                                        Export
                                                     </button>
                                                 </td>
                                             )}
@@ -56,14 +56,8 @@ export default function KeysModal({ isOpen, onClose, action, keys }) {
                         }
                         {action === "Generate" &&
                             <div>
-                                <button className={`mr-2 text-blue-600 hover:text-blue-80`} onClick={() => {vault.generatePair(vault.email)}}>
+                                <button className={`mr-2 text-blue-600 hover:text-blue-80`} onClick={() => { vault.generatePair(vault.email) }}>
                                     Generate
-                                </button>
-                                <button className={`mr-2 text-blue-600 hover:text-blue-80`} onClick={() => {vault.lockVault('123')}}>
-                                    Lock
-                                </button>
-                                <button className={`mr-2 text-blue-600 hover:text-blue-80`} onClick={() => {vault.unlockVault('123')}}>
-                                    Unlock
                                 </button>
                             </div>
                         }
