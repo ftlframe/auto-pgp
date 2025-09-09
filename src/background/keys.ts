@@ -4,6 +4,9 @@ import type { Vault, VaultEntry, KeyPair } from "~types/vault";
 import { securePasswordStore } from "./vault";
 import { globalVars } from "./userState";
 
+// TODO: Import/export, think of how to do it
+
+
 export async function handleKeyGenerate(emailParam?: string) {
     try {
         const derivedKey = securePasswordStore.getKey();

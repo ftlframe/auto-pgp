@@ -1,185 +1,88 @@
-import { createRoot } from "react-dom/client"
-import cssText from "data-text:~style.css"
+import * as InboxSDK from "@inboxsdk/core";
+import type { PlasmoCSConfig } from "plasmo";
 
-const extractEmailFromTitle = () => {
-  const title = document.querySelector('title');
-  // Common Gmail title formats:
-  // 1. "Inbox (30,034) - name@gmail.com - Gmail"
-  // 2. "name@gmail.com - Gmail"
-  // 3. "Starred - name@gmail.com - Gmail"
-  const emailRegex = /(?:^| - )([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?= - Gmail|$)/;
-  const match = title.textContent.match(emailRegex);
-  chrome.runtime.sendMessage({
-    type: 'SET_EMAIL',
-    payload: { email: match[1] }
-  })
+export const config: PlasmoCSConfig = {
+  matches: ["https://mail.google.com/*"],
+  run_at: "document_end"
 };
 
-const PGPButton = () => {
-  const handleClick = () => {
-    // Get email content
-    const content = document.querySelector(".Am.aiL, .editable")?.textContent || ""
+const SDK_APP_ID = process.env.PLASMO_PUBLIC_INBOX_SDK_APP_ID;
 
-    // We will use a mutation observer to watch for changes in the recipient field
-    // Find spans inside the div with class "aoD hl"
-    const recipientSpans = document.querySelectorAll('div.aoD.hl span');
+type EncryptionResponse = {
+    success: any;
+    encryptedContent: any;
+    error: string;
+};
 
-    // Extract the recipient email addresses
-    let recipients: string[] = [];
-    recipientSpans.forEach((span) => {
-      const textContent = span.textContent?.trim();
-      if (textContent) {
-        recipients.push(textContent);  // Add the recipient's email to the array
-      }
-    });
-    console.log(recipients)
-    // Send the content and recipients to the background script
-    chrome.runtime.sendMessage({
-      type: "PGP_ENCRYPT_REQUEST",
-      payload: { content, recipients}
-    })
-  }
+type Contact = { name: string; emailAddress: string; };
 
-  // Render the button
-  return (
-    <div
-      onClick={handleClick}
-      className="T-I J-J5-Ji aoO T-I-atl"
-      style={{
-        backgroundColor: "#1a73e8",
-        color: "white",
-        marginRight: "8px",
-        marginLeft: "2px",
-        minWidth: "85px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: "4px",
-        fontFamily: "'Google Sans', Roboto, sans-serif",
-        fontSize: "14px",
-        fontWeight: 500,
-        height: "36px",
-        padding: "0 16px",
-        position: "relative",
-        cursor: "pointer",
-      }}
-      role="button"
-      tabIndex={0}
-      aria-label="PGP Encrypt"
-      data-tooltip="PGP Encrypt"
-    >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ marginRight: "6px" }}
-      >
-        <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-      </svg>
-      Encrypt
-    </div>
-  )
-}
+InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
+  console.log("[Auto-PGP] InboxSDK loaded successfully.");
 
-const injectPGPButton = () => {
-  // Check for existing button
-  if (document.getElementById("pgp-button-container")) return
+  const userEmail = sdk.User.getEmailAddress();
+  chrome.runtime.sendMessage({ type: 'SET_EMAIL', payload: { email: userEmail } });
 
-  // Find the send button container
-  const sendButtonContainer = document.querySelector(".dC")
-  if (!sendButtonContainer) return
+  sdk.Compose.registerComposeViewHandler((composeView) => {
+    composeView.addButton({
+      title: "Encrypt with PGP",
+      iconUrl: 'https://cdn.iconscout.com/icon/free/png-512/free-lock-icon-svg-download-png-2235834.png',
+      onClick: async (event) => {
+        const compose = event.composeView;
+        const originalBody = await compose.getTextContent();
+        const originalSubject = await compose.getSubject();
+                
+        // 1. Get all confirmed "pill" recipients
+        const toContacts    = compose.getToRecipients();
+        const ccContacts    = compose.getCcRecipients();
+        const bccContacts   = compose.getBccRecipients();
 
-  // Create container for our button
-  const container = document.createElement("div")
-  container.id = "pgp-button-container"
-  container.className = "J-J5-Ji"
-  container.style.display = "inline-flex"
-  container.style.alignItems = "center"
+        let allRecipients = [
+          ...toContacts.map(c => c.emailAddress),
+          ...ccContacts.map(c => c.emailAddress),
+          ...bccContacts.map(c => c.emailAddress)
+        ];
 
-  // Insert before send button
-  sendButtonContainer.parentNode?.insertBefore(container, sendButtonContainer)
+        // 2. Also check for unconfirmed text in the input fields
+        const metadataForm = compose.getMetadataForm();
+        const inputs = metadataForm.querySelectorAll('input[name="to"], input[name="cc"], input[name="bcc"]');
+        
+        inputs.forEach(input => {
+          const email = (input as HTMLInputElement).value;
+          if (email && /.+@.+\..+/.test(email)) {
+            allRecipients.push(email);
+          }
+        });
+        
+        // Remove duplicates
+        allRecipients = [...new Set(allRecipients)];
+        
 
-  // Render React component
-  const root = createRoot(container)
-  root.render(<PGPButton />)
-}
-
-// Function to observe changes to the compose window and inject the PGP button
-const observeComposeWindow = () => {
-  const observer = new MutationObserver(() => {
-    if (document.querySelector(".aYF, .nH.Hd")) {
-      // Wait for toolbar to be ready
-      setTimeout(() => {
-        if (document.querySelector(".dC") && !document.getElementById("pgp-button-container")) {
-          injectPGPButton()
+        if (allRecipients.length === 0) {
+          compose.setSubject(originalSubject);
+          compose.setBodyText("Please add at least one recipient before encrypting.\n\n" + originalBody);
+          return;
         }
-      }, 300)
-    }
-  })
+        
+        console.log("[Auto-PGP] Requesting encryption for:", { recipients: allRecipients, content: originalBody });
 
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  })
+        const response: EncryptionResponse = await chrome.runtime.sendMessage({
+            type: "PGP_ENCRYPT_REQUEST",
+            payload: { recipients: allRecipients, content: originalBody }
+        });
+
+        if (response.success && response.encryptedContent) {
+          compose.setSubject("[PGP Encrypted] " + originalSubject);
+          compose.setBodyText(response.encryptedContent);
+        } else {
+          const errorMessage = `--- ENCRYPTION FAILED ---\n${response.error || 'An unknown error occurred.'}\n\n--- ORIGINAL MESSAGE ---\n`;
+          compose.setSubject(originalSubject);
+          compose.setBodyText(errorMessage + originalBody);
+        }
+      },
+    });
+  });
+});
+
+export default function PlasmoContent() {
+  return null;
 }
-
-// Add a hover effect for the button
-const injectStylesheet = () => {
-  const style = document.createElement('style')
-  style.textContent = `
-    #pgp-button-container .T-I:hover {
-      background-color: #1967d2 !important;
-      box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15) !important;
-    }
-    #pgp-button-container .T-I:active {
-      background-color: #1a73e8 !important;
-      box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3) !important;
-    }
-  `
-  document.head.appendChild(style)
-}
-
-// Initialize when Gmail is ready
-if (document.readyState === "complete") {
-  observeComposeWindow()
-  injectStylesheet()
-} else {
-  window.addEventListener("load", () => {
-    observeComposeWindow()
-    injectStylesheet()
-    extractEmailFromTitle()
-  })
-}
-
-/**
- * Generates a style element with adjusted CSS to work correctly within a Shadow DOM.
- */
-export const getStyle = (): HTMLStyleElement => {
-  const baseFontSize = 16
-
-  let updatedCssText = cssText.replaceAll(":root", ":host(plasmo-csui)")
-  const remRegex = /([\d.]+)rem/g
-  updatedCssText = updatedCssText.replace(remRegex, (match, remValue) => {
-    const pixelsValue = parseFloat(remValue) * baseFontSize
-    return `${pixelsValue}px`
-  })
-
-  const styleElement = document.createElement("style")
-  styleElement.textContent = updatedCssText
-
-  return styleElement
-}
-
-const PlasmoOverlay = () => {
-  return (
-    <div className="z-50 flex fixed top-32 right-8">
-    </div>
-  )
-}
-
-export default PlasmoOverlay

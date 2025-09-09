@@ -1,6 +1,7 @@
 import { Storage } from "@plasmohq/storage";
 import { routeMessage } from "./messaging";
 import { handleLock } from "./session";
+import "@inboxsdk/core/background";
 
 console.log("Background script loaded.");
 

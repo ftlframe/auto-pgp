@@ -1,8 +1,4 @@
 import { createContext, useContext, useEffect, useReducer, useState } from "react";
-import type { Contact, KeyPair, Vault } from "~types/vault";
-import { Storage } from "@plasmohq/storage"
-import { error, log } from "console";
-import { decrypt, deriveKey, encrypt, generateSalt } from "~lib/crypto/vault";
 
 export const VaultContext = createContext<{
     isUnlocked: boolean | null,
@@ -224,7 +220,7 @@ export default function VaultProvider({ children }) {
         getKeys,            // Function that gets the keys for the email
         deleteKey,
         /**
-         * Helper ops
+         * Helpers
          */
         getEmail,           // Function that gets the displayed email from the background/content and stores it in state
     }

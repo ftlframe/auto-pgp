@@ -9,6 +9,7 @@ export function generateSalt(length = 16): string {
     return btoa(String.fromCharCode(...array));
 }
 
+// TODO: Insert settings here
 /**
  * Function that derives the plaintext password using the `PBKDF2` function by default
  * @param password Plaintext password

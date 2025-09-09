@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import ContactsModal from "~components/modals/ContactModal";
+import ContactsModal from "~components/modals/contacts/ContactModal";
 
 export default function ContactTab() {
 

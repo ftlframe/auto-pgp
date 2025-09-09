@@ -4,21 +4,11 @@ import { handleLock } from './session';
 import { handleKeyGenerate, handleGetKeys, handleDeleteKey } from './keys';
 import { handleAddContact, handleGetContacts, handleDeleteContact } from './contacts';
 import { handleSetEmail, handleGetEmail, handleGmailEmailDetected } from './userState';
+import { handlePgpEncryptRequest } from './pgp';
 // Import resetActivityTimer if using timeout-based auto-lock and want to reset on activity
 // import { resetActivityTimer } from './session';
 
-// Placeholder for PGP Encrypt Request Handler
-async function handlePgpEncryptRequest(payload: { recipients: string[], content: string }) {
-    console.log("PGP_ENCRYPT_REQUEST received");
-    console.log("Recipients:", payload.recipients);
-    console.log("Content:", payload.content);
-    // TODO: Implement actual PGP encryption logic using recipient public keys
-    // This will involve:
-    // 1. Getting the sender's key pair (handle potential need for decryption password).
-    // 2. Getting recipient public keys (from vault contacts or elsewhere).
-    // 3. Calling an OpenPGP library function to encrypt and sign.
-    return { success: false, error: "PGP encryption not implemented yet." };
-}
+
 
 
 export function routeMessage(request: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void): boolean | undefined {
