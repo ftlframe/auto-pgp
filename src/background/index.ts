@@ -1,6 +1,6 @@
 import { Storage } from "@plasmohq/storage";
 import { routeMessage } from "./messaging";
-import { handleLock } from "./session";
+import { handleLock, resetActivityTimer } from "./session";
 import "@inboxsdk/core/background";
 
 console.log("Background script loaded.");
@@ -15,8 +15,8 @@ chrome.runtime.onConnect.addListener((port) => {
     if (port.name === "vault-ui") {
         console.log("Vault popup opened");
         port.onDisconnect.addListener(() => {
-            console.log("Vault popup closed");
-            handleLock().catch((err) => console.error("Failed to auto-lock vault:", err));
+            console.log("Vault popup closed, resetting activity timer");
+            resetActivityTimer();
         });
     }
 });

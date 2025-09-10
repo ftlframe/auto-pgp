@@ -1,6 +1,6 @@
 // Import all handler functions
 import { handleUnlock, handleInit, handleEncryptAndStoreVault } from './vault';
-import { handleLock } from './session';
+import { handleLock, resetActivityTimer } from './session';
 import { handleKeyGenerate, handleGetKeys, handleDeleteKey } from './keys';
 import { handleAddContact, handleGetContacts, handleDeleteContact } from './contacts';
 import { handleSetEmail, handleGetEmail, handleGmailEmailDetected } from './userState';
@@ -15,7 +15,7 @@ export function routeMessage(request: any, sender: chrome.runtime.MessageSender,
     // console.log("Received message:", request.type, "Payload:", request.payload || request);
 
     // If using activity timer, reset it on any relevant message
-    // resetActivityTimer(); // Be selective about which messages reset the timer
+    resetActivityTimer();
 
     switch (request.type) {
         /**
