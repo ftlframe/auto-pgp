@@ -1,9 +1,14 @@
 import { createContext, useContext, useEffect, useReducer, useState } from "react";
+import type { Contact } from "~types/vault";
+
+
+type NewContactData = { name: string, email: string, publicKeyArmored: string };
 
 export const VaultContext = createContext<{
     isUnlocked: boolean | null,
     email: string | null,
     userKeys: [] | null,
+    contacts: Contact[],
     unlockVault: (password: string) => Promise<void>;
     lockVault: (password: string) => Promise<void>;
     initVault: (password: string) => Promise<void>;
@@ -11,31 +16,22 @@ export const VaultContext = createContext<{
     getEmail: () => Promise<void>;
     getKeys: () => Promise<void>;
     deleteKey: (keyID: string) => Promise<void>;
+    getContacts: () => Promise<Contact[]>;
+    addContact: (contact: { name: string, email: string, publicKeyArmored: string }) => Promise<any>;
 }>({
     isUnlocked: null,
     email: null,
     userKeys: null,
-    unlockVault: () => {
-        return null;
-    },
-    lockVault: () => {
-        return null
-    },
-    initVault: () => {
-        return null
-    },
-    generatePair: () => {
-        return null
-    },
-    getEmail: () => {
-        return null
-    },
-    getKeys: () => {
-        return null
-    },
-    deleteKey: () => {
-        return null
-    },
+    contacts: [],
+    unlockVault: async () => { },
+    lockVault: async () => { },
+    initVault: async () => { },
+    generatePair: async () => { },
+    getEmail: async () => { },
+    getKeys: async () => { },
+    deleteKey: async () => { },
+    getContacts: async () => [],
+    addContact: async () => { },
 })
 
 /**
@@ -57,6 +53,7 @@ export default function VaultProvider({ children }) {
     const [isUnlocked, setIsUnlocked] = useState(false);
     const [email, setEmail] = useState('');
     const [userKeys, setUserKeys] = useState(null)
+    const [contacts, setContacts] = useState<Contact[]>([]);
 
     /**
      * ================
@@ -103,8 +100,10 @@ export default function VaultProvider({ children }) {
                 error?: string;
                 vault?: string;
             }>("UNLOCK", { password });
-            if(response.success)
+            if (response.success) {
                 setIsUnlocked(true);
+                chrome.runtime.sendMessage({ type: "RETRY_PENDING_ACTION" });
+            }
             else
                 alert(response.error)
         } catch (error) {
@@ -187,13 +186,46 @@ export default function VaultProvider({ children }) {
             const response = await sendToBackground<{
                 success: string;
                 error?: string;
-            }>('DELETE_KEY', {keyId, email})
+            }>('DELETE_KEY', { keyId, email })
 
             await getKeys();
         } catch (error) {
-            
+
         }
     }
+    /**
+    * ----------------------------------------------------------------
+    */
+
+    // --- CONTACT OPERATIONS ---
+    const getContacts = async (): Promise<Contact[]> => {
+        if (!email) return [];
+        try {
+            const response = await sendToBackground<{ success: boolean, contacts: Contact[] }>("GET_CONTACTS", { email });
+            if (response.success) {
+                setContacts(response.contacts);
+                return response.contacts;
+            }
+        } catch (error) {
+            console.error("Failed to get contacts:", error);
+        }
+        return [];
+    };
+
+
+    const addContact = async (contact: NewContactData) => {
+        if (!email) return { success: false, error: "User email not set." };
+
+        // Wrap the data in a payload object for consistency
+        const payload = { currentUserEmail: email, newContact: contact };
+        const response = await sendToBackground<{ success: boolean, error?: string }>("ADD_CONTACT", { payload });
+
+        if (response.success) {
+            await getContacts(); // Refresh the list after adding
+        }
+        return response;
+    };
+
     /**
     * ----------------------------------------------------------------
     */
@@ -207,6 +239,7 @@ export default function VaultProvider({ children }) {
         isUnlocked,         // Helper state for child component rendering
         email,              // Helper state for email rendering
         userKeys,           // Helper state to store the keys for the email
+        contacts,
         /**
          * Vault ops
          */
@@ -219,6 +252,11 @@ export default function VaultProvider({ children }) {
         generatePair,       // Function that generates a key pair for the email and stores it in the map
         getKeys,            // Function that gets the keys for the email
         deleteKey,
+        /**
+         * Contact ops
+         */
+        getContacts,
+        addContact,
         /**
          * Helpers
          */

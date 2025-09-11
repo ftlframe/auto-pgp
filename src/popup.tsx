@@ -13,7 +13,7 @@ function IndexPopupContent() {
 function IndexPopup() {
 
   return (
-    <div className="w-[500px] h-[300px]">
+    <div className="w-[450px] h-[550px]">
       <VaultProvider>
         <IndexPopupContent />
       </VaultProvider>

@@ -1,7 +1,7 @@
 import { generatePGPKeyPair } from "~lib/crypto/keys";
 import { encrypt } from "~lib/crypto/vault";
 import type { Vault, VaultEntry, KeyPair } from "~types/vault";
-import { securePasswordStore } from "./vault";
+import { handleEncryptAndStoreVault, securePasswordStore } from "./vault";
 import { globalVars } from "./userState";
 
 // TODO: Import/export, think of how to do it
@@ -57,9 +57,10 @@ export async function handleKeyGenerate(emailParam?: string) {
         // Add the new key pair using a unique ID (e.g., fingerprint or UUID)
         const keyId = fingerprint || crypto.randomUUID(); // Prefer fingerprint if available
         vaultEntry.keyPairs.set(keyId, newKeyPair);
-
-        // Update the vault in the secure store (doesn't auto-save yet)
         securePasswordStore.setVault(currentVault);
+
+        console.log("[Background] New key generated. Saving updated vault...");
+        await handleEncryptAndStoreVault();
 
         console.log(`Successfully generated and added key ${keyId} for ${email}.`);
         // await handleEncryptAndStoreVault(); // Optional: Save immediately
@@ -121,7 +122,10 @@ export async function handleDeleteKey(keyId: string, email?: string) {
     if (entry && entry.keyPairs.has(keyId)) {
         entry.keyPairs.delete(keyId);
         securePasswordStore.setVault(currentVault);
-        // await handleEncryptAndStoreVault(); // Optional: Save immediately
+
+        console.log("[Background] Key deleted. Saving updated vault...");
+        await handleEncryptAndStoreVault();
+
         return { success: true };
     }
     return { success: false, error: "Key not found" };

@@ -9,7 +9,7 @@ import { handlePgpEncryptRequest } from './pgp';
 // import { resetActivityTimer } from './session';
 
 
-
+let pendingRequestInfo: { payload: any, tabId: number } | null = null;
 
 export function routeMessage(request: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void): boolean | undefined {
     // console.log("Received message:", request.type, "Payload:", request.payload || request);
@@ -81,7 +81,7 @@ export function routeMessage(request: any, sender: chrome.runtime.MessageSender,
          * ==================
          */
         case "ADD_CONTACT":
-            handleAddContact(request.email, request.contact).then(sendResponse);
+            handleAddContact(request.payload.currentUserEmail, request.payload.newContact).then(sendResponse);
             return true;
 
         case "GET_CONTACTS":
@@ -103,9 +103,47 @@ export function routeMessage(request: any, sender: chrome.runtime.MessageSender,
             // No return true needed if no sendResponse is called
             break; // Exit switch
 
+        case "OPEN_POPUP_FOR_UNLOCK":
+            console.log("[Background] Received request from content script to open popup.");
+            chrome.action.openPopup();
+            break;
+
         case "PGP_ENCRYPT_REQUEST":
-            handlePgpEncryptRequest(request.payload).then(sendResponse);
+            const senderTabId = sender.tab?.id;
+            handlePgpEncryptRequest(request.payload).then(response => {
+                if (response.error === "vault_locked" && senderTabId) {
+                    console.log(`[Background] Vault is locked. Storing pending request from tab ${senderTabId}.`);
+                    pendingRequestInfo = { payload: request.payload, tabId: senderTabId };
+                }
+                sendResponse(response);
+            });
             return true;
+
+        case "RETRY_PENDING_ACTION":
+            console.log("[Background] Received RETRY_PENDING_ACTION from popup.");
+            if (pendingRequestInfo) {
+                // We use the tabId we saved from the ORIGINAL request.
+                // The sender of THIS message is the popup, which has no tab.
+                const { payload, tabId } = pendingRequestInfo;
+                pendingRequestInfo = null; // Clear the pending request
+
+                console.log(`[Background] Retrying encryption for tab ${tabId}.`);
+                handlePgpEncryptRequest(payload)
+                    .then(response => {
+                        console.log("[Background] Retry finished. Sending result to tab:", response);
+                        // Check if the saved tabId is valid before sending.
+                        if (tabId) {
+                            chrome.tabs.sendMessage(tabId, {
+                                type: "ENCRYPTION_RESULT",
+                                payload: response
+                            });
+                        }
+                    });
+            } else {
+                console.log("[Background] No pending action to retry.");
+            }
+            // This message from the popup does not need a response back to the popup.
+            break;
 
         /**
          * ==================
