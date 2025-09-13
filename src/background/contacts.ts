@@ -70,7 +70,29 @@ export async function handleGetContacts(email: string) {
     return { success: true, contacts: contacts };
 }
 
-export async function handleDeleteContact(email: string, contactId: string) {
-    // ... to be implemented later
-    return { success: false, error: "Not yet implemented." };
+export async function handleDeleteContactKey(currentUserEmail: string, contactEmail: string, keyFingerprint: string) {
+    const currentVault = securePasswordStore.getVault();
+    if (!currentVault || !securePasswordStore.getKey()) {
+        return { success: false, error: "Vault locked" };
+    }
+
+    const userVaultEntry = currentVault.vault.get(currentUserEmail);
+    const contact = userVaultEntry?.contacts.get(contactEmail);
+
+    if (!contact) {
+        return { success: false, error: "Contact not found." };
+    }
+
+    const keyIndex = contact.publicKeys.findIndex(pk => pk.fingerprint === keyFingerprint);
+
+    if (keyIndex > -1) {
+        contact.publicKeys.splice(keyIndex, 1); // Remove the key from the array
+        userVaultEntry.contacts.set(contactEmail, contact);
+        securePasswordStore.setVault(currentVault);
+        await handleEncryptAndStoreVault();
+        console.log(`[Background] Deleted key ${keyFingerprint} from contact ${contactEmail}. Vault saved.`);
+        return { success: true };
+    }
+
+    return { success: false, error: "Key fingerprint not found for this contact." };
 }

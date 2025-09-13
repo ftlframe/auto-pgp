@@ -18,6 +18,7 @@ export const VaultContext = createContext<{
     deleteKey: (keyID: string) => Promise<void>;
     getContacts: () => Promise<Contact[]>;
     addContact: (contact: { name: string, email: string, publicKeyArmored: string }) => Promise<any>;
+    deleteContactKey: (contactEmail: string, keyFingerprint: string) => Promise<any>;
 }>({
     isUnlocked: null,
     email: null,
@@ -32,6 +33,7 @@ export const VaultContext = createContext<{
     deleteKey: async () => { },
     getContacts: async () => [],
     addContact: async () => { },
+    deleteContactKey: async () => {},
 })
 
 /**
@@ -226,6 +228,17 @@ export default function VaultProvider({ children }) {
         return response;
     };
 
+
+    const deleteContactKey = async (contactEmail: string, keyFingerprint: string) => {
+        if (!email) return { success: false, error: "User email not set." };
+        const response = await sendToBackground<{success: boolean, error?: string}>("DELETE_CONTACT_KEY", {
+            payload: { currentUserEmail: email, contactEmail, keyFingerprint }
+        });
+        if (response.success) {
+            await getContacts(); // Refresh the list after deleting a key
+        }
+        return response;
+    };
     /**
     * ----------------------------------------------------------------
     */
@@ -257,6 +270,7 @@ export default function VaultProvider({ children }) {
          */
         getContacts,
         addContact,
+        deleteContactKey,
         /**
          * Helpers
          */

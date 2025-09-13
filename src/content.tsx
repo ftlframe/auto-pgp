@@ -22,7 +22,7 @@ type Contact = { name: string; emailAddress: string; };
  * Builds and displays a modal for the user to make key selections,
  * following the best practices from the InboxSDK Widgets documentation.
  */
-async function showKeySelectionModal(sdk: InboxSDK.Widgets, composeView: InboxSDK.ComposeView, payload: any) {
+async function showKeySelectionModal(widgets: InboxSDK.Widgets, composeView: InboxSDK.ComposeView, payload: any) {
   // Store original content to resend after user makes selections
   const originalBody = await composeView.getTextContent();
   const originalRecipients = (await Promise.all([
@@ -39,7 +39,7 @@ async function showKeySelectionModal(sdk: InboxSDK.Widgets, composeView: InboxSD
   // 2. Create the form element that will contain all our inputs
   const formEl = document.createElement('form');
   formEl.id = 'key-selection-form';
-  
+
   // Helper function to create a styled fieldset for grouping options
   const createFieldset = (legendText: string) => {
     const fieldset = document.createElement('fieldset');
@@ -112,7 +112,7 @@ async function showKeySelectionModal(sdk: InboxSDK.Widgets, composeView: InboxSD
   modalEl.appendChild(formEl);
 
   // 4. Use the official Widgets API to show the modal
-  const modal = sdk.showModalView({
+  const modal = widgets.showModalView({
     title: 'Encryption Key Selection Required',
     el: modalEl,
     buttons: [
@@ -165,19 +165,52 @@ async function showKeySelectionModal(sdk: InboxSDK.Widgets, composeView: InboxSD
 InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
   console.log("[Auto-PGP] InboxSDK loaded successfully.");
 
+  let lastActiveComposeView: InboxSDK.ComposeView | null = null;
   const userEmail = sdk.User.getEmailAddress();
   chrome.runtime.sendMessage({ type: 'SET_EMAIL', payload: { email: userEmail } });
+
+  chrome.runtime.onMessage.addListener((message) => {
+    const composeView = lastActiveComposeView;
+    if (!composeView) return;
+
+    if (message.type === "ENCRYPTION_RESULT") {
+      console.log("[Auto-PGP] Received final encryption result after retry.", message.payload);
+      const response = message.payload;
+      if (response.success && response.encryptedContent) {
+        // --- FIX: Use synchronous calls ---
+        const subject = composeView.getSubject();
+        composeView.setSubject("[PGP Encrypted] " + subject);
+        composeView.setBodyText(response.encryptedContent);
+        // --- END FIX ---
+      } else {
+        // --- FIX: Use synchronous calls ---
+        const originalBody = composeView.getTextContent();
+        const errorMessage = `--- ENCRYPTION FAILED ---\n${response.error || 'An unknown error occurred.'}\n\n--- ORIGINAL MESSAGE ---\n`;
+        composeView.setBodyText(errorMessage + originalBody);
+        // --- END FIX ---
+      }
+      lastActiveComposeView = null;
+    } else if (message.type === "SHOW_SELECTION_MODAL") {
+      console.log("[Auto-PGP] Received request to show selection modal after unlock.");
+      showKeySelectionModal(sdk.Widgets, composeView, message.payload);
+      lastActiveComposeView = null;
+    }
+  });
 
   sdk.Compose.registerComposeViewHandler((composeView) => {
     composeView.addButton({
       title: "Encrypt with PGP",
       iconUrl: 'https://cdn.iconscout.com/icon/free/png-512/free-lock-icon-svg-download-png-2235834.png',
       onClick: async (event) => {
+        lastActiveComposeView = event.composeView;
         const compose = event.composeView;
-        const originalBody = await compose.getTextContent();
-        const originalSubject = await compose.getSubject();
-        
-        // **BUG FIX:** Added 'await' to all recipient calls. This is critical.
+
+        // --- FIX: Use synchronous calls ---
+        const originalBody = compose.getTextContent();
+        const originalSubject = compose.getSubject();
+        // --- END FIX ---
+
+        // Asynchronous calls for recipients are still correct
         const toContacts: Contact[] = await compose.getToRecipients();
         const ccContacts: Contact[] = await compose.getCcRecipients();
         const bccContacts: Contact[] = await compose.getBccRecipients();
@@ -188,47 +221,39 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
           ...bccContacts.map(c => c.emailAddress)
         ];
 
-        // **BUG FIX:** Changed getMetadataForm() to getMetadataFormElement()
-        const metadataForm = compose.getMetadataForm(); 
+        const metadataForm = compose.getMetadataForm();
         const inputs = metadataForm.querySelectorAll('input[name="to"], input[name="cc"], input[name="bcc"]');
-        
+
         inputs.forEach(input => {
           const email = (input as HTMLInputElement).value;
-          if (email && /.+@.+\..+/.test(email)) {
-            allRecipients.push(email);
-          }
+          if (email && /.+@.+\..+/.test(email)) { allRecipients.push(email); }
         });
-        
+
         allRecipients = [...new Set(allRecipients)];
-        
+
         if (allRecipients.length === 0) {
           compose.setSubject(originalSubject);
           compose.setBodyText("Please add at least one recipient before encrypting.\n\n" + originalBody);
           return;
         }
-        
+
         compose.setBodyText("Checking keys and encrypting...");
-        console.log("[Auto-PGP] Requesting encryption for:", { recipients: allRecipients, content: originalBody });
 
         const response: EncryptionResponse = await chrome.runtime.sendMessage({
-            type: "PGP_ENCRYPT_REQUEST",
-            payload: { recipients: allRecipients, content: originalBody }
+          type: "PGP_ENCRYPT_REQUEST",
+          payload: { recipients: allRecipients, content: originalBody }
         });
 
-        // This is the new, more powerful response handling logic
         if (response.error === 'vault_locked') {
-          console.log('[Auto-PGP] Vault is locked. Asking background to open popup');
           chrome.runtime.sendMessage({ type: "OPEN_POPUP_FOR_UNLOCK" });
-          compose.setBodyText(originalBody); // Restore body while user unlocks
+          compose.setBodyText(originalBody);
           return;
         } else if (response.error === 'key_selection_required') {
-          console.log('[Auto-PGP] Ambiguity detected. Showing key selection modal.');
-          compose.setBodyText(originalBody); // Restore body while user decides
+          compose.setBodyText(originalBody);
           showKeySelectionModal(sdk.Widgets, compose, response.payload);
           return;
         }
 
-        // Handle immediate success or other failures
         if (response.success && response.encryptedContent) {
           compose.setSubject("[PGP Encrypted] " + originalSubject);
           compose.setBodyText(response.encryptedContent);
