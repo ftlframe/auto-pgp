@@ -27,11 +27,3 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Return true inside routeMessage if the response is async
     return routeMessage(request, sender, sendResponse);
 });
-
-// TODO: Add idle listener registration if implementing auto-lock via idle
-// import { handleIdleLock } from "./session";
-// chrome.idle.onStateChanged.addListener(handleIdleLock);
-
-// TODO: Add activity listener registration if implementing auto-lock via timer
-// import { resetActivityTimer } from "./session";
-// document.addEventListener('mousemove', resetActivityTimer); // Or other activity events

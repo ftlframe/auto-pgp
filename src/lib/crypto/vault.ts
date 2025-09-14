@@ -40,26 +40,19 @@ export async function deriveKey(password, salt): Promise<CryptoKey> {
     );
 }
 
-/**
- * Gets the vault string encoding
- * @param vault Vault object
- * @returns Encoded vault in Uint8Array
- */
-function getVaultEncoding(vault): Uint8Array {
-    let enc = new TextEncoder();
-    return enc.encode(vault)
-}
 
 /**
- * 
- * @param derivedKey Derived key using 
- * @param vault 
- * @returns 
+ * Encrypts data using a derived key.
+ * @param derivedKey The CryptoKey derived from the user's password.
+ * @param data The data (string or object) to encrypt.
+ * @returns An object with the base64-encoded ciphertext and IV.
  */
-export async function encrypt(derivedKey, data) {
-    
-    let encoded = getVaultEncoding(typeof data === 'string' ? data : JSON.stringify(data))
-    let iv = crypto.getRandomValues(new Uint8Array(12));
+export async function encrypt(derivedKey: CryptoKey, data: string | object) {
+    const dataToEncode = typeof data === 'string' ? data : JSON.stringify(data);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+
+    const encodedUint8Array = new TextEncoder().encode(dataToEncode);
+    const cleanBuffer = encodedUint8Array.buffer.slice(0);
 
     const encryptedBuffer = await crypto.subtle.encrypt(
         {
@@ -67,7 +60,7 @@ export async function encrypt(derivedKey, data) {
             iv: iv
         },
         derivedKey,
-        encoded
+        cleanBuffer
     );
 
     const encryptedBase64 = btoa(String.fromCharCode(...new Uint8Array(encryptedBuffer)));
