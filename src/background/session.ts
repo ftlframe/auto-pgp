@@ -1,3 +1,4 @@
+import { globalVars } from "./userState";
 import { securePasswordStore, handleEncryptAndStoreVault } from "./vault";
 
 let activityTimeout: NodeJS.Timeout | null = null;
@@ -8,36 +9,54 @@ const AUTO_LOCK_TIMEOUT_MS = 120_000; // 2 minutes
  */
 export async function handleLock() {
     console.log("Locking vault...");
-    if (securePasswordStore.getKey() && securePasswordStore.getVault()) {
-        // Only encrypt if unlocked and vault loaded
-        const encryptResult = await handleEncryptAndStoreVault();
-        if (!encryptResult.success) {
-            console.error("Failed to encrypt vault before locking:", encryptResult.error);
-            // Decide if you should proceed with wipe or not. Wiping is safer.
+    try {
+        // First, ATTEMPT to save the current state of the vault.
+        if (securePasswordStore.getVault() && securePasswordStore.getKey()) {
+            console.log("Vault is unlocked. Saving to persistent storage before locking...");
+            const encryptResult = await handleEncryptAndStoreVault();
+            if (!encryptResult.success) {
+                // The error is already logged inside the function, but we can add context.
+                console.error("Data integrity warning: The latest vault state could not be saved before locking. Recent changes may be lost.");
+            }
         }
-    } else {
-        console.log("Vault already locked or not loaded, wiping credentials only.");
+    } catch (error) {
+        console.error("An unexpected error occurred during the pre-lock save operation:", error);
+    } finally {
+        // --- This 'finally' block ALWAYS runs, ensuring a secure state ---
+
+        console.log("Wiping all sensitive data from memory...");
+
+        // 1. Wipe the vault and derived key.
+        await securePasswordStore.wipe();
+
+        // 2. Wipe any other sensitive global state.
+        globalVars.clearEmail();
+
+        // 3. Clear any pending auto-lock timer.
+        if (activityTimeout) {
+            clearTimeout(activityTimeout);
+            activityTimeout = null;
+        }
+        console.log("Vault locked and all credentials wiped.");
     }
-    await securePasswordStore.wipe();
-    // globalVars.clearEmail(); // Also clear email on lock
-    clearTimeout(activityTimeout as NodeJS.Timeout); // Clear timer on manual lock
-    activityTimeout = null;
-    console.log("Vault locked and credentials wiped.");
     return { success: true };
 }
 
 
+
 // --- Auto-Lock Mechanisms ---
 
-// Option 1: Timeout-based
+/**
+ * Resets the inactivity timer that leads to an auto-lock.
+ */
 export function resetActivityTimer() {
-    if (securePasswordStore.getKey()) { // Only reset timer if unlocked
-        clearTimeout(activityTimeout as NodeJS.Timeout);
+    if (securePasswordStore.getKey()) { // Only run the timer if the vault is unlocked
+        if (activityTimeout) {
+            clearTimeout(activityTimeout);
+        }
         activityTimeout = setTimeout(async () => {
             console.log("Auto-locking due to inactivity.");
             await handleLock();
-            // Optionally notify the user/UI
-            // chrome.runtime.sendMessage({ type: "VAULT_LOCKED" }).catch(e => {});
         }, AUTO_LOCK_TIMEOUT_MS);
     }
 }

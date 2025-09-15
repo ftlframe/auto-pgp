@@ -21,8 +21,7 @@ type PgpResponse = {
 type Contact = { name: string; emailAddress: string; };
 
 /**
- * Builds and displays a modal for the user to make key selections,
- * following the best practices from the InboxSDK Widgets documentation.
+ * Builds and displays a modal for the user to make key selections
  */
 async function showKeySelectionModal(widgets: InboxSDK.Widgets, composeView: InboxSDK.ComposeView, payload: any) {
   // Store original content to resend after user makes selections
@@ -145,7 +144,7 @@ async function showKeySelectionModal(widgets: InboxSDK.Widgets, composeView: Inb
           modal.close();
           composeView.setBodyText("Encrypting with selected keys...");
 
-          const finalResponse: EncryptionResponse = await chrome.runtime.sendMessage({
+          const finalResponse: PgpResponse = await chrome.runtime.sendMessage({
             type: "PGP_ENCRYPT_REQUEST",
             payload: { recipients: originalRecipients, content: originalBody, selections: selections }
           });
