@@ -1,6 +1,7 @@
 import * as openpgp from 'openpgp';
 import { handleEncryptAndStoreVault, securePasswordStore } from "./vault";
 import type { Contact, PublicKeyInfo, VaultEntry } from "~types/vault";
+import { globalVars } from './userState';
 
 export async function handleAddContact(currentUserEmail: string, newContactData: { name: string, email: string, publicKeyArmored: string, notes?: string }) {
     const currentVault = securePasswordStore.getVault();
@@ -60,12 +61,20 @@ export async function handleAddContact(currentUserEmail: string, newContactData:
     }
 }
 
-export async function handleGetContacts(email: string) {
+export async function handleGetContacts(email?: string) {
     const currentVault = securePasswordStore.getVault();
     if (!currentVault || !securePasswordStore.getKey()) {
         return { success: false, error: "Vault locked", contacts: [] };
     }
-    const entry = currentVault.vault.get(email);
+
+    // Determine the target email, falling back to the globally stored one
+    const targetEmail = email || globalVars.getEmail();
+    if (!targetEmail) {
+        return { success: false, error: "No user email specified or detected.", contacts: [] };
+    }
+
+    // Use the resolved 'targetEmail' to get the correct vault entry
+    const entry = currentVault.vault.get(targetEmail);
     const contacts = entry ? Array.from(entry.contacts.values()) : [];
     return { success: true, contacts: contacts };
 }

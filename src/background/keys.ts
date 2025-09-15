@@ -46,12 +46,12 @@ export async function handleKeyGenerate(emailParam?: string) {
 
         // Create the new KeyPair object
         const newKeyPair: KeyPair = {
-            fingerprint: fingerprint, // Use the actual fingerprint
-            publicKey: publicKey,
+            fingerprint: fingerprint,
+            armoredKey: publicKey,
             encryptedPrivateKey: encryptedPrivateKey,
             iv: iv,
-            dateCreated: new Date(),
-            dateExpire: null // Or implement expiry logic
+            created: new Date(),
+            expires: null
         };
 
         // Add the new key pair using a unique ID (e.g., fingerprint or UUID)
@@ -63,7 +63,6 @@ export async function handleKeyGenerate(emailParam?: string) {
         await handleEncryptAndStoreVault();
 
         console.log(`Successfully generated and added key ${keyId} for ${email}.`);
-        // await handleEncryptAndStoreVault(); // Optional: Save immediately
 
         return { success: true, fingerprint: keyId };
 
@@ -79,9 +78,6 @@ export async function handleKeyGenerate(emailParam?: string) {
  * @returns Returns the keys without any sensitive info
  */
 export async function handleGetKeys(email?: string) {
-    // Ensure vault is unlocked.
-    // Decrypt private keys ONLY if explicitly needed and handle securely.
-    // Return public keys, fingerprints, dates etc.
     const currentVault = securePasswordStore.getVault();
     const targetEmail = email || globalVars.getEmail();
 
@@ -93,12 +89,12 @@ export async function handleGetKeys(email?: string) {
     }
 
     const entry = currentVault.vault.get(targetEmail);
+    // Map the KeyPair data to the PublicKeyInfo shape for the frontend
     const keys = entry ? Array.from(entry.keyPairs.values()).map(kp => ({
         fingerprint: kp.fingerprint,
-        publicKey: kp.publicKey, // Return public key safely
-        dateCreated: kp.dateCreated,
-        dateExpire: kp.dateExpire
-        // DO NOT return encryptedPrivateKey or iv unless absolutely necessary
+        armoredKey: kp.armoredKey,
+        created: kp.created,
+        expires: kp.expires,
     })) : [];
 
     return { success: true, keys: keys };
@@ -110,8 +106,6 @@ export async function handleGetKeys(email?: string) {
  * @returns Response to the front
  */
 export async function handleDeleteKey(keyId: string, email?: string) {
-
-    // Consider triggering an auto-save/encrypt.
     const currentVault = securePasswordStore.getVault();
     const targetEmail = email || globalVars.getEmail();
 

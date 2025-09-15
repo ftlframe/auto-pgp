@@ -10,11 +10,13 @@ export const config: PlasmoCSConfig = {
 const SDK_APP_ID = process.env.PLASMO_PUBLIC_INBOX_SDK_APP_ID;
 
 // --- Type Definitions ---
-type EncryptionResponse = {
+type PgpResponse = {
   success: boolean;
   encryptedContent?: string;
+  decryptedContent?: string;
   error?: string;
-  payload?: any; // To receive the selection payload from the background
+  payload?: any;
+  keyFingerprint?: string;
 };
 type Contact = { name: string; emailAddress: string; };
 
@@ -239,7 +241,7 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
 
         compose.setBodyText("Checking keys and encrypting...");
 
-        const response: EncryptionResponse = await chrome.runtime.sendMessage({
+        const response: PgpResponse = await chrome.runtime.sendMessage({
           type: "PGP_ENCRYPT_REQUEST",
           payload: { recipients: allRecipients, content: originalBody }
         });
@@ -263,6 +265,54 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
           compose.setBodyText(errorMessage + originalBody);
         }
       },
+    });
+  });
+
+  let elementToDecrypt: HTMLElement | null = null;
+
+  sdk.Conversations.registerThreadViewHandler((threadView) => {
+    const messageViews = threadView.getMessageViews();
+
+    messageViews.forEach((messageView) => {
+      const bodyElement = messageView.getBodyElement();
+      // Check if the message body contains a PGP block
+      if (bodyElement.innerText.includes("-----BEGIN PGP MESSAGE-----")) {
+
+        messageView.addToolbarButton({
+          title: "Decrypt Message",
+          iconUrl: 'https://cdn.iconscout.com/icon/free/png-512/free-unlock-icon-svg-download-png-1213973.png',
+          section: sdk.Conversations.MessageViewToolbarSectionNames.MORE,
+          onClick: async (event) => {
+            // Find the specific DOM element containing the PGP block to replace it later
+            const pgpBlockElement = Array.from(bodyElement.querySelectorAll('div, pre')).find(el => (el as HTMLElement).innerText.includes("-----BEGIN PGP MESSAGE-----")) as HTMLElement;
+
+            if (pgpBlockElement) {
+              elementToDecrypt = pgpBlockElement; // Store a reference to the element
+              const armoredMessage = pgpBlockElement.innerText;
+
+              pgpBlockElement.innerHTML = '<p style="font-family: sans-serif; color: #555;">Requesting decryption...</p>';
+
+              // Send the PGP block to the background for the first decryption attempt
+              const response: PgpResponse = await chrome.runtime.sendMessage({
+                type: "PGP_DECRYPT_REQUEST",
+                payload: { armoredMessage }
+              });
+
+              // If the background needs a password, it will tell us to open the popup
+              if (response.error === 'password_required') {
+                chrome.runtime.sendMessage({
+                  type: "OPEN_POPUP_FOR_DECRYPT",
+                  payload: { armoredMessage, keyFingerprint: response.keyFingerprint }
+                });
+              } else if (!response.success) {
+                // Handle other immediate failures (e.g., no private key found)
+                elementToDecrypt.innerHTML = `<p style="font-family: sans-serif; color: red;"><b>Decryption Failed:</b> ${response.error}</p>`;
+                elementToDecrypt = null; // Clear reference on failure
+              }
+            }
+          },
+        });
+      }
     });
   });
 });

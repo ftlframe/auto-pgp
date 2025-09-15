@@ -9,17 +9,24 @@ export function MainLayout() {
     const vault = useVault()
     useEffect(() => {
         async function getter() {
-            await vault.getKeys()
-            await vault.getEmail()
+            // It's good practice to get the email first for the UI title
+            await vault.getEmail();
+            // These calls no longer depend on the email state in the frontend
+            await vault.getKeys();
+            await vault.getContacts();
         }
 
-        getter();
-    }, []) 
+        // This check ensures we only fetch data once the vault is unlocked
+        if (vault.isUnlocked) {
+            getter();
+        }
+    }, [vault.isUnlocked]);
+
     return (
         <div className="rounded-lg">
             <header className="bg-white shadow-sm">
                 <div className="max-w-4xl mx-auto px-4 py-4">
-                    <h1 className="text-2xl font-bold text-purple-600 mb-4">Auto-PGP { vault.email !== ''? '- ' + vault.email: ' - /'}</h1>
+                    <h1 className="text-2xl font-bold text-purple-600 mb-4">Auto-PGP {vault.email !== '' ? '- ' + vault.email : ' - /'}</h1>
                     <nav className="flex space-x-8">
                         <button
                             className={`pb-2 px-1 ${activeTab === 'overview'
@@ -52,11 +59,11 @@ export function MainLayout() {
                 </div>
             </header>
             <main className="flex-1 max-w-4xl mx-auto w-full ">
-                {activeTab === 'overview' && <OverviewTab/>}
+                {activeTab === 'overview' && <OverviewTab />}
 
-                {activeTab === 'keys' && <KeysTab/>}
+                {activeTab === 'keys' && <KeysTab />}
 
-                {activeTab === 'contacts' && <ContactTab/>}
+                {activeTab === 'contacts' && <ContactTab />}
             </main>
         </div>
     );

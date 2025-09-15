@@ -1,35 +1,34 @@
-// A new interface to hold details for a single public key.
-// This allows us to store more than just the key string.
+// src/types/vault.ts
+
+// This is now the ONE definitive interface for public key info.
 export interface PublicKeyInfo {
-  armoredKey: string;                   // The -----BEGIN PGP PUBLIC KEY BLOCK----- string
-  fingerprint: string;
-  created: Date;
-  nickname?: string;                    // Optional user-provided name for the key
+    armoredKey: string;     // The -----BEGIN PGP PUBLIC KEY BLOCK----- string
+    fingerprint: string;
+    created: Date;
+    expires?: Date | null;  // Optional expiration date
+    nickname?: string;      // Optional user-provided name for the key
 }
 
-export interface KeyPair {
-    fingerprint: string;
-    publicKey: string;
-    encryptedPrivateKey: string;        // Encrypted with derived key
+// For the user's own keys, which also include an encrypted private key.
+export interface KeyPair extends PublicKeyInfo {
+    encryptedPrivateKey: string;
     iv: string;
-    dateCreated: Date;
-    dateExpire: Date | null;
 }
 
 export interface Contact {
-    id: string;                         // Unique ID for this contact entry
-    name?: string;                      // User-friendly name
-    email: string;                      // Primary identifier
-    publicKeys: PublicKeyInfo[];        // An array to hold multiple keys
+    id: string;
+    name?: string;
+    email: string;
+    publicKeys: PublicKeyInfo[]; // This now uses our unified type
     dateAdded?: Date;
     notes?: string;
 }
 
 export interface VaultEntry {
-    keyPairs: Map<string, KeyPair>;     // Map of the user's own key pairs
-    contacts: Map<string, Contact>;     // Map of contacts, using their email as the key
+    keyPairs: Map<string, KeyPair>;
+    contacts: Map<string, Contact>;
 }
 
 export interface Vault {
-    vault: Map<string, VaultEntry>;     // The main vault, using the user's email as the key
+    vault: Map<string, VaultEntry>;
 }

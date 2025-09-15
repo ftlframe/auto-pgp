@@ -33,104 +33,87 @@ export async function handlePgpEncryptRequest(payload: {
 
         let selectedUserKey: KeyPair | undefined;
         const recipientPublicKeys: openpgp.Key[] = [];
-        const selectionsNeeded = {
-            userKeyOptions: [],
-            recipientKeyOptions: {},
-            newContacts: []
-        };
 
+        // --- Determine the user's signing key first ---
         const userKeyPairs = Array.from(userVaultEntry.keyPairs.values());
+        if (payload.selections?.userKeyFingerprint) {
+            // User made an explicit choice
+            selectedUserKey = userVaultEntry.keyPairs.get(payload.selections.userKeyFingerprint);
+        } else if (userKeyPairs.length === 1) {
+            // Auto-select if there's only one key
+            selectedUserKey = userKeyPairs[0];
+        } else if (userKeyPairs.length > 1 && !payload.selections) {
+            // If there's ambiguity and no selection has been made yet, we must ask.
+            // This logic is part of the ambiguity check below.
+        } else if (userKeyPairs.length === 0) {
+            return { success: false, error: "No PGP key found for you. Please generate one first." };
+        }
 
-        if (payload.selections) {
-            // --- THIS BLOCK IS NOW SMARTER ---
-            console.log("[Auto-PGP] Received request with user selections.");
-            const selections = payload.selections;
+        // --- If this is the first pass, check for any ambiguities ---
+        if (!payload.selections) {
+            const selectionsNeeded = {
+                userKeyOptions: [],
+                recipientKeyOptions: {},
+                newContacts: []
+            };
 
-            // A. Determine the user's signing key
-            if (selections.userKeyFingerprint) {
-                // The user made an explicit choice in the modal.
-                selectedUserKey = userVaultEntry.keyPairs.get(selections.userKeyFingerprint);
-            } else if (userKeyPairs.length === 1) {
-                // No choice was presented for the user key (because there was only one),
-                // so we must auto-select it again here on the final request.
-                selectedUserKey = userKeyPairs[0];
-            }
-            // --- END CORRECTION ---
-
-            if (selections.newContactKeys) {
-                for (const email in selections.newContactKeys) {
-                    const armoredKey = selections.newContactKeys[email];
-                    await handleAddContact(currentUserEmail, { name: email, email: email, publicKeyArmored: armoredKey });
-                    const key = await openpgp.readKey({ armoredKey });
-                    recipientPublicKeys.push(key);
-                }
-            }
-
-            if (selections.recipientKeyFingerprints) {
-                for (const email in selections.recipientKeyFingerprints) {
-                    const contact = userVaultEntry.contacts.get(email);
-                    const fingerprint = selections.recipientKeyFingerprints[email];
-                    const keyInfo = contact?.publicKeys.find(k => k.fingerprint === fingerprint);
-                    if (keyInfo) {
-                        const key = await openpgp.readKey({ armoredKey: keyInfo.armoredKey });
-                        recipientPublicKeys.push(key);
-                    } else {
-                        return { success: false, error: `Could not find selected key for ${email}` };
-                    }
-                }
-            }
-        } else {
-            // This is the initial request, so we analyze for ambiguities.
-            // This logic remains the same.
-            if (userKeyPairs.length === 0) {
-                return { success: false, error: "No PGP key found for you. Please generate one first." };
-            } else if (userKeyPairs.length === 1) {
-                selectedUserKey = userKeyPairs[0];
-            } else {
-                selectionsNeeded.userKeyOptions = userKeyPairs.map(kp => ({ fingerprint: kp.fingerprint, created: kp.dateCreated }));
+            if (userKeyPairs.length > 1) {
+                selectionsNeeded.userKeyOptions = userKeyPairs.map(kp => ({ fingerprint: kp.fingerprint, created: kp.created }));
             }
 
             for (const recipientEmail of payload.recipients) {
                 const contact = userVaultEntry.contacts.get(recipientEmail);
                 if (!contact) {
                     selectionsNeeded.newContacts.push(recipientEmail);
-                } else if (!contact.publicKeys || contact.publicKeys.length === 0) {
-                    return { success: false, error: `Contact ${recipientEmail} exists but has no public key stored.` };
-                } else if (contact.publicKeys.length === 1) {
-                    const key = await openpgp.readKey({ armoredKey: contact.publicKeys[0].armoredKey });
-                    recipientPublicKeys.push(key);
-                } else {
+                } else if (contact.publicKeys.length > 1) {
                     selectionsNeeded.recipientKeyOptions[recipientEmail] = contact.publicKeys.map(pk => ({
                         fingerprint: pk.fingerprint, created: pk.created, nickname: pk.nickname
                     }));
                 }
             }
+
+            // If any selections are needed, return now and wait for the user to respond.
+            if (selectionsNeeded.userKeyOptions.length > 0 || Object.keys(selectionsNeeded.recipientKeyOptions).length > 0 || selectionsNeeded.newContacts.length > 0) {
+                return { success: false, error: "key_selection_required", payload: selectionsNeeded };
+            }
         }
 
-        if (selectionsNeeded.userKeyOptions.length > 0 || Object.keys(selectionsNeeded.recipientKeyOptions).length > 0 || selectionsNeeded.newContacts.length > 0) {
-            return { success: false, error: "key_selection_required", payload: selectionsNeeded };
+        // --- Process the full recipient list to gather public keys ---
+        for (const recipientEmail of payload.recipients) {
+            const contact = userVaultEntry.contacts.get(recipientEmail);
+            let armoredKey: string | undefined;
+
+            if (payload.selections?.newContactKeys?.[recipientEmail]) {
+                // This is a new contact, use the key provided from the modal
+                armoredKey = payload.selections.newContactKeys[recipientEmail];
+                await handleAddContact(currentUserEmail, { name: recipientEmail, email: recipientEmail, publicKeyArmored: armoredKey });
+            } else if (payload.selections?.recipientKeyFingerprints?.[recipientEmail]) {
+                // This is a contact with multiple keys, use the selected one
+                const fingerprint = payload.selections.recipientKeyFingerprints[recipientEmail];
+                armoredKey = contact?.publicKeys.find(k => k.fingerprint === fingerprint)?.armoredKey;
+            } else if (contact?.publicKeys.length === 1) {
+                // This is a simple case, auto-select the only key
+                armoredKey = contact.publicKeys[0].armoredKey;
+            }
+
+            if (armoredKey) {
+                recipientPublicKeys.push(await openpgp.readKey({ armoredKey }));
+            }
         }
 
-        if (!selectedUserKey) {
-            return { success: false, error: "Could not determine a signing key." };
-        }
-        if (recipientPublicKeys.length === 0) {
-            return { success: false, error: "No valid recipient public keys found." };
-        }
+        // --- Final check and encryption ---
+        if (!selectedUserKey) return { success: false, error: "Could not determine a signing key." };
+        if (recipientPublicKeys.length === 0) return { success: false, error: "No valid recipient public keys found." };
 
         const decryptedPrivateKeyArmor = await decrypt(derivedKey, selectedUserKey.iv, selectedUserKey.encryptedPrivateKey);
         const userPrivateKey = await openpgp.readPrivateKey({ armoredKey: decryptedPrivateKeyArmor });
-
         const message = await openpgp.createMessage({ text: payload.content });
-
-        console.log("[Auto-PGP] Performing encryption and signing...");
         const encryptedMessage = await openpgp.encrypt({
             message,
             encryptionKeys: recipientPublicKeys,
             signingKeys: userPrivateKey,
         });
 
-        console.log("[Auto-PGP] Encryption successful.");
         return { success: true, encryptedContent: encryptedMessage };
 
     } catch (error) {
