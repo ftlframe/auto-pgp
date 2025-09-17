@@ -108,15 +108,21 @@ export function routeMessage(request: any, sender: chrome.runtime.MessageSender,
             const pendingInfo = getPendingDecryption();
             if (pendingInfo) {
                 handlePerformDecryption(request.payload.password).then(response => {
+                    // First, send the final result to the content script tab
                     if (pendingInfo.tabId) {
                         chrome.tabs.sendMessage(pendingInfo.tabId, {
                             type: "DECRYPTION_RESULT",
                             payload: response
                         });
                     }
+                    // THEN, send the same response back to the popup so it can close.
+                    sendResponse(response);
                 });
+            } else {
+                // Handle the edge case where there's no pending action
+                sendResponse({ success: false, error: "No pending action found." });
             }
-            return true;
+            return true; // We are responding asynchronously.
 
         default:
             console.warn("Unknown message type received:", request.type);
