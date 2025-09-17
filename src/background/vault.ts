@@ -15,18 +15,11 @@ export const securePasswordStore = {
 
     async setAndDerive(password: string, salt: string): Promise<void> {
         const encoder = new TextEncoder();
+        this._derivedKey = await deriveKey(password, salt);
+
+        // The rest is for securely wiping temporary variables from memory
         this._password = encoder.encode(password);
         this._salt = encoder.encode(salt);
-
-        // Immediately start overwriting original strings
-        let tempPassword = password.padEnd(64, ' ').slice(0, 64); // Overwrite attempt
-        this._derivedKey = await deriveKey(tempPassword, salt);
-        tempPassword = ''.padEnd(64, ' '); // More overwriting
-
-        let tempSalt = salt.padEnd(64, ' ').slice(0, 64); // Overwrite attempt
-        tempSalt = ''.padEnd(64, ' '); // More overwriting
-
-        // Wipe temporary arrays after deriving the key
         crypto.getRandomValues(this._password);
         crypto.getRandomValues(this._salt);
         this._password = new Uint8Array();
@@ -84,7 +77,7 @@ export async function handleUnlock(password: string) {
         }
 
         const decrypted = await decrypt(derivedKey, iv, encrypted);
-        if(decrypted === null) {
+        if (decrypted === null) {
             return { success: false, error: 'Bad password!' }
         }
         const parsed = JSON.parse(decrypted); // Assuming decrypt returns string

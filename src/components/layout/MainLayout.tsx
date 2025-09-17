@@ -55,6 +55,12 @@ export function MainLayout() {
                         >
                             Contacts
                         </button>
+                        <button
+                            onClick={vault.debugDumpVault}
+                            className="absolute bottom-4 right-4 bg-gray-200 p-2 rounded-lg text-xs"
+                        >
+                            Debug: Dump Vault
+                        </button>
                     </nav>
                 </div>
             </header>

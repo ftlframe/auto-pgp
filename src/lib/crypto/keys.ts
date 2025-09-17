@@ -6,7 +6,7 @@ export async function generatePGPKeyPair(email: string) {
         type: 'rsa', // or 'ecc'
         rsaBits: 2048, // size of the RSA key
         userIDs: [{ email }],
-        passphrase: '', // encrypts the private key
+        passphrase: ''
     });
 
     const fingerprint = await getFingerprint(publicKey)

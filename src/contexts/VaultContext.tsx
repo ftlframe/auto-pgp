@@ -1,27 +1,30 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import type { Contact } from "~types/vault";
-import type { PublicKeyInfo } from "~types/vault";
+import type { Contact, PublicKeyInfo } from "~types/vault";
 
 type NewContactData = { name: string, email: string, publicKeyArmored: string };
+type UnlockResult = { success: boolean; error?: string; };
 
 export const VaultContext = createContext<{
   isUnlocked: boolean | null,
   email: string | null,
   userKeys: PublicKeyInfo[] | null,
   contacts: Contact[],
-  unlockVault: (password: string) => Promise<void>;
+  unlockVault: (password: string) => Promise<UnlockResult>;
   lockVault: () => Promise<void>;
   initVault: (password: string) => Promise<void>;
-  generatePair: () => Promise<void>;
+  generatePair: () => Promise<void>; // Takes email from context state
   getEmail: () => Promise<void>;
   getKeys: () => Promise<void>;
   deleteKey: (keyID: string) => Promise<void>;
   getContacts: () => Promise<Contact[]>;
   addContact: (contact: NewContactData) => Promise<any>;
   deleteContactKey: (contactEmail: string, keyFingerprint: string) => Promise<any>;
+  pendingAction: any;
+  debugDumpVault: () => void;
+  performDecryption: (password: string) => Promise<any>; // <-- ADDED for the prompt
 }>({
   isUnlocked: null, email: null, userKeys: null, contacts: [],
-  unlockVault: async () => { },
+  unlockVault: async () => ({ success: false, error: "Not implemented" }),
   lockVault: async () => { },
   initVault: async () => { },
   generatePair: async () => { },
@@ -31,6 +34,9 @@ export const VaultContext = createContext<{
   getContacts: async () => [],
   addContact: async () => { },
   deleteContactKey: async () => { },
+  pendingAction: null,
+  debugDumpVault: () => { },
+  performDecryption: async () => { }, // <-- ADDED for the prompt
 });
 
 
@@ -43,6 +49,7 @@ export default function VaultProvider({ children }) {
   const [email, setEmail] = useState('');
   const [userKeys, setUserKeys] = useState<PublicKeyInfo[] | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [pendingAction, setPendingAction] = useState(null);
 
   const initVault = async (password: string) => {
     try {
@@ -57,17 +64,18 @@ export default function VaultProvider({ children }) {
     }
   };
 
-  const unlockVault = async (password: string) => {
+  const unlockVault = async (password: string): Promise<UnlockResult> => {
     try {
-      const response = await sendToBackground<{ success: boolean; error?: string; }>("UNLOCK", { payload: { password } });
+      const response = await sendToBackground<UnlockResult>("UNLOCK", { payload: { password } });
       if (response.success) {
         setIsUnlocked(true);
+        // This retry is now only for the ENCRYPTION flow
         chrome.runtime.sendMessage({ type: "RETRY_PENDING_ACTION" });
-      } else {
-        alert(response.error);
       }
+      return response;
     } catch (error) {
       console.log(error);
+      return { success: false, error: "An unexpected error occurred." };
     }
   };
 
@@ -123,12 +131,10 @@ export default function VaultProvider({ children }) {
       console.log(error);
     }
   };
-  
+
   const getContacts = async (): Promise<Contact[]> => {
-    // We can't get contacts if the vault is locked, but we don't need to check for email here.
     if (!isUnlocked) return [];
     try {
-      // --- FIX: Remove the email payload. ---
       const response = await sendToBackground<{ success: boolean, contacts: Contact[] }>("GET_CONTACTS");
       if (response.success) {
         setContacts(response.contacts);
@@ -160,17 +166,37 @@ export default function VaultProvider({ children }) {
     return response;
   };
 
+  const debugDumpVault = () => {
+    console.log("Requesting vault dump...");
+    chrome.runtime.sendMessage({ type: "DEBUG_DUMP_VAULT" });
+  };
+
+  const performDecryption = async (password: string) => {
+    console.log(password)
+    return sendToBackground("PERFORM_DECRYPTION", { payload: { password } });
+  };
+
   useEffect(() => {
+    // When popup opens, ask if there's a pending action
+    chrome.runtime.sendMessage({ type: "GET_PENDING_ACTION" }, (response) => {
+      if (response) {
+        console.log("Pending action found:", response);
+        setPendingAction(response);
+      }
+    });
+
     const port = chrome.runtime.connect({ name: "vault-ui" });
     return () => port.disconnect();
   }, []);
+
 
   const vault = {
     isUnlocked, email, userKeys, contacts,
     unlockVault, lockVault, initVault,
     generatePair, getKeys, deleteKey,
     getContacts, addContact, getEmail,
-    deleteContactKey,
+    deleteContactKey, pendingAction, debugDumpVault,
+    performDecryption, // <-- EXPORT THE NEW FUNCTION
   };
 
   return (

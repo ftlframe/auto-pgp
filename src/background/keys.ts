@@ -11,61 +11,38 @@ export async function handleKeyGenerate(emailParam?: string) {
     try {
         const derivedKey = securePasswordStore.getKey();
         const currentVault = securePasswordStore.getVault();
-
         if (!derivedKey || !currentVault) {
-            console.error("Cannot generate keys: Vault is locked or not loaded.");
             return { success: false, error: "Vault is locked." };
         }
 
-        // Use provided email, fallback to global state, finally error if none
         const email = emailParam || globalVars.getEmail();
         if (!email) {
-            console.error("Cannot generate keys: No email specified or detected.");
             return { success: false, error: "Email address is required." };
         }
 
-        console.log(`Generating PGP key pair for ${email}...`);
-        // Assume generatePGPKeyPair includes fingerprint generation
         const { publicKey, privateKey, fingerprint } = await generatePGPKeyPair(email);
-
-        console.log(`Encrypting private key for ${email}...`);
         const { ciphertext: encryptedPrivateKey, iv } = await encrypt(derivedKey, privateKey);
 
-        // Get or create the vault entry for this email
         let vaultEntry = currentVault.vault.get(email);
         if (!vaultEntry) {
-            console.log(`Creating new vault entry for ${email}.`);
-            vaultEntry = {
-                keyPairs: new Map<string, KeyPair>(),
-                contacts: new Map<string, any>() // Use 'any' or specific Contact type
-            };
+            vaultEntry = { keyPairs: new Map(), contacts: new Map() };
             currentVault.vault.set(email, vaultEntry);
-        } else {
-            console.log(`Adding key to existing vault entry for ${email}.`);
         }
 
-        // Create the new KeyPair object
         const newKeyPair: KeyPair = {
             fingerprint: fingerprint,
-            armoredKey: publicKey,
+            armoredKey: publicKey,      // Corrected from publicKey
             encryptedPrivateKey: encryptedPrivateKey,
             iv: iv,
-            created: new Date(),
+            created: new Date(),        // Corrected from dateCreated
             expires: null
         };
 
-        // Add the new key pair using a unique ID (e.g., fingerprint or UUID)
-        const keyId = fingerprint || crypto.randomUUID(); // Prefer fingerprint if available
-        vaultEntry.keyPairs.set(keyId, newKeyPair);
+        vaultEntry.keyPairs.set(fingerprint, newKeyPair);
         securePasswordStore.setVault(currentVault);
-
-        console.log("[Background] New key generated. Saving updated vault...");
         await handleEncryptAndStoreVault();
 
-        console.log(`Successfully generated and added key ${keyId} for ${email}.`);
-
-        return { success: true, fingerprint: keyId };
-
+        return { success: true, fingerprint: fingerprint };
     } catch (error) {
         console.error("Key generation failed:", error);
         return { success: false, error: `Key generation failed: ${error.message}` };

@@ -21,27 +21,23 @@ type PgpResponse = {
 type Contact = { name: string; emailAddress: string; };
 
 /**
- * Builds and displays a modal for the user to make key selections
+ * Builds and displays a modal for the user to make key selections.
  */
 async function showKeySelectionModal(widgets: InboxSDK.Widgets, composeView: InboxSDK.ComposeView, payload: any) {
-  // Store original content to resend after user makes selections
-  const originalBody = await composeView.getTextContent();
+  const originalBody = composeView.getTextContent();
   const originalRecipients = (await Promise.all([
     composeView.getToRecipients(),
     composeView.getCcRecipients(),
     composeView.getBccRecipients()
   ])).flat().map(c => c.emailAddress);
 
-  // 1. Create the root element for the modal content
   const modalEl = document.createElement('div');
   modalEl.style.padding = '20px';
   modalEl.style.fontSize = '14px';
 
-  // 2. Create the form element that will contain all our inputs
   const formEl = document.createElement('form');
   formEl.id = 'key-selection-form';
 
-  // Helper function to create a styled fieldset for grouping options
   const createFieldset = (legendText: string) => {
     const fieldset = document.createElement('fieldset');
     fieldset.style.border = '1px solid #ccc';
@@ -57,17 +53,13 @@ async function showKeySelectionModal(widgets: InboxSDK.Widgets, composeView: Inb
     return fieldset;
   };
 
-  // 3. Programmatically create and append each section of the form
   if (payload.userKeyOptions?.length > 0) {
     const fieldset = createFieldset("Select your signing key");
     payload.userKeyOptions.forEach((key, index) => {
       const label = document.createElement('label');
-      label.style.display = 'block';
-      label.style.margin = '5px 0';
+      label.style.display = 'block'; label.style.margin = '5px 0';
       const radio = document.createElement('input');
-      radio.type = 'radio';
-      radio.name = 'userKeyFingerprint';
-      radio.value = key.fingerprint;
+      radio.type = 'radio'; radio.name = 'userKeyFingerprint'; radio.value = key.fingerprint;
       if (index === 0) radio.checked = true;
       label.appendChild(radio);
       label.append(` Key ending in ...${key.fingerprint.slice(-16)} (Created: ${formatDate(key.created)})`);
@@ -82,12 +74,9 @@ async function showKeySelectionModal(widgets: InboxSDK.Widgets, composeView: Inb
       const fieldset = createFieldset(`Select key for ${email}`);
       keys.forEach((key, index) => {
         const label = document.createElement('label');
-        label.style.display = 'block';
-        label.style.margin = '5px 0';
+        label.style.display = 'block'; label.style.margin = '5px 0';
         const radio = document.createElement('input');
-        radio.type = 'radio';
-        radio.name = `recipientKey_${email}`;
-        radio.value = key.fingerprint;
+        radio.type = 'radio'; radio.name = `recipientKey_${email}`; radio.value = key.fingerprint;
         if (index === 0) radio.checked = true;
         label.appendChild(radio);
         label.append(` Key ending in ...${key.fingerprint.slice(-16)} (Created: ${formatDate(key.created)})`);
@@ -101,8 +90,7 @@ async function showKeySelectionModal(widgets: InboxSDK.Widgets, composeView: Inb
     payload.newContacts.forEach(email => {
       const fieldset = createFieldset(`New Contact: Provide Public Key for ${email}`);
       const textarea = document.createElement('textarea');
-      textarea.name = `newContactKey_${email}`;
-      textarea.required = true;
+      textarea.name = `newContactKey_${email}`; textarea.required = true;
       textarea.placeholder = '-----BEGIN PGP PUBLIC KEY BLOCK-----...';
       textarea.style.cssText = 'width:100%; height:120px; font-family:monospace; font-size:12px; margin-top:5px; padding: 5px; border: 1px solid #ddd; border-radius: 3px;';
       fieldset.appendChild(textarea);
@@ -112,7 +100,6 @@ async function showKeySelectionModal(widgets: InboxSDK.Widgets, composeView: Inb
 
   modalEl.appendChild(formEl);
 
-  // 4. Use the official Widgets API to show the modal
   const modal = widgets.showModalView({
     title: 'Encryption Key Selection Required',
     el: modalEl,
@@ -122,17 +109,14 @@ async function showKeySelectionModal(widgets: InboxSDK.Widgets, composeView: Inb
         text: 'Confirm & Encrypt',
         onClick: async () => {
           if (!formEl.checkValidity()) {
-            formEl.reportValidity();
-            return;
+            formEl.reportValidity(); return;
           }
-
           const formData = new FormData(formEl);
           const selections = {
             userKeyFingerprint: formData.get('userKeyFingerprint') as string,
             recipientKeyFingerprints: {},
             newContactKeys: {}
           };
-
           for (const [key, value] of formData.entries()) {
             if (key.startsWith('recipientKey_')) {
               selections.recipientKeyFingerprints[key.replace('recipientKey_', '')] = value as string;
@@ -140,7 +124,6 @@ async function showKeySelectionModal(widgets: InboxSDK.Widgets, composeView: Inb
               selections.newContactKeys[key.replace('newContactKey_', '')] = value as string;
             }
           }
-
           modal.close();
           composeView.setBodyText("Encrypting with selected keys...");
 
@@ -150,8 +133,9 @@ async function showKeySelectionModal(widgets: InboxSDK.Widgets, composeView: Inb
           });
 
           if (finalResponse.success && finalResponse.encryptedContent) {
-            composeView.setBodyText(finalResponse.encryptedContent);
-            composeView.setSubject("[PGP Encrypted] " + await composeView.getSubject());
+            const formattedPgpBlock = `<pre style="font-family: monospace; white-space: pre-wrap; font-size: 12px;">${finalResponse.encryptedContent}</pre>`;
+            composeView.setBodyHTML(formattedPgpBlock);
+            composeView.setSubject("[PGP Encrypted] " + composeView.getSubject());
           } else {
             composeView.setBodyText(`Encryption failed after selection: ${finalResponse.error}`);
           }
@@ -162,38 +146,54 @@ async function showKeySelectionModal(widgets: InboxSDK.Widgets, composeView: Inb
   });
 }
 
+function normalizePgpBlock(text: string): string | null {
+  const pgpRegex = /-----BEGIN PGP MESSAGE-----(.|\n|\r)*?-----END PGP MESSAGE-----/;
+  const match = text.match(pgpRegex);
+  if (!match || !match[0]) return null;
+
+  let block = match[0];
+  const header = "-----BEGIN PGP MESSAGE-----";
+  if (!block.startsWith(header + "\n") && !block.startsWith(header + "\r\n")) {
+    block = block.replace(header, header + "\n\n");
+  }
+  return block;
+}
+
 // --- Main execution block ---
 InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
   console.log("[Auto-PGP] InboxSDK loaded successfully.");
 
   let lastActiveComposeView: InboxSDK.ComposeView | null = null;
+  let elementToDecrypt: HTMLElement | null = null;
+
   const userEmail = sdk.User.getEmailAddress();
   chrome.runtime.sendMessage({ type: 'SET_EMAIL', payload: { email: userEmail } });
 
   chrome.runtime.onMessage.addListener((message) => {
-    const composeView = lastActiveComposeView;
-    if (!composeView) return;
-
-    if (message.type === "ENCRYPTION_RESULT") {
-      console.log("[Auto-PGP] Received final encryption result after retry.", message.payload);
+    if (message.type === "ENCRYPTION_RESULT" && lastActiveComposeView) {
+      const composeView = lastActiveComposeView;
       const response = message.payload;
       if (response.success && response.encryptedContent) {
-        // --- FIX: Use synchronous calls ---
         const subject = composeView.getSubject();
         composeView.setSubject("[PGP Encrypted] " + subject);
-        composeView.setBodyText(response.encryptedContent);
-        // --- END FIX ---
+        const formattedPgpBlock = `<pre style="font-family: monospace; white-space: pre-wrap; font-size: 12px;">${response.encryptedContent}</pre>`;
+        composeView.setBodyHTML(formattedPgpBlock);
       } else {
-        // --- FIX: Use synchronous calls ---
         const originalBody = composeView.getTextContent();
         const errorMessage = `--- ENCRYPTION FAILED ---\n${response.error || 'An unknown error occurred.'}\n\n--- ORIGINAL MESSAGE ---\n`;
         composeView.setBodyText(errorMessage + originalBody);
-        // --- END FIX ---
       }
       lastActiveComposeView = null;
-    } else if (message.type === "SHOW_SELECTION_MODAL") {
-      console.log("[Auto-PGP] Received request to show selection modal after unlock.");
-      showKeySelectionModal(sdk.Widgets, composeView, message.payload);
+    } else if (message.type === "DECRYPTION_RESULT" && elementToDecrypt) {
+      const response = message.payload;
+      if (response.success && response.decryptedContent) {
+        elementToDecrypt.innerHTML = `<blockquote style="font-family: sans-serif; white-space: pre-wrap; padding: 15px; border-left: 4px solid #ccc; background: #f9f9f9; margin: 10px 0;">${response.decryptedContent}</blockquote>`;
+      } else {
+        elementToDecrypt.innerHTML = `<p style="font-family: sans-serif; color: red;"><b>Decryption Failed:</b> ${response.error}</p>`;
+      }
+      elementToDecrypt = null;
+    } else if (message.type === "SHOW_SELECTION_MODAL" && lastActiveComposeView) {
+      showKeySelectionModal(sdk.Widgets, lastActiveComposeView, message.payload);
       lastActiveComposeView = null;
     }
   });
@@ -205,13 +205,9 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
       onClick: async (event) => {
         lastActiveComposeView = event.composeView;
         const compose = event.composeView;
-
-        // --- FIX: Use synchronous calls ---
         const originalBody = compose.getTextContent();
         const originalSubject = compose.getSubject();
-        // --- END FIX ---
 
-        // Asynchronous calls for recipients are still correct
         const toContacts: Contact[] = await compose.getToRecipients();
         const ccContacts: Contact[] = await compose.getCcRecipients();
         const bccContacts: Contact[] = await compose.getBccRecipients();
@@ -233,7 +229,6 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
         allRecipients = [...new Set(allRecipients)];
 
         if (allRecipients.length === 0) {
-          compose.setSubject(originalSubject);
           compose.setBodyText("Please add at least one recipient before encrypting.\n\n" + originalBody);
           return;
         }
@@ -246,6 +241,7 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
         });
 
         if (response.error === 'vault_locked') {
+          // Use the specific message for the encryption flow
           chrome.runtime.sendMessage({ type: "OPEN_POPUP_FOR_UNLOCK" });
           compose.setBodyText(originalBody);
           return;
@@ -257,7 +253,8 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
 
         if (response.success && response.encryptedContent) {
           compose.setSubject("[PGP Encrypted] " + originalSubject);
-          compose.setBodyText(response.encryptedContent);
+          const formattedPgpBlock = `<pre style="font-family: monospace; white-space: pre-wrap; font-size: 12px;">${response.encryptedContent}</pre>`;
+          compose.setBodyHTML(formattedPgpBlock);
         } else {
           const errorMessage = `--- ENCRYPTION FAILED ---\n${response.error || 'An unknown error occurred.'}\n\n--- ORIGINAL MESSAGE ---\n`;
           compose.setSubject(originalSubject);
@@ -267,46 +264,43 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
     });
   });
 
-  let elementToDecrypt: HTMLElement | null = null;
-
   sdk.Conversations.registerThreadViewHandler((threadView) => {
     const messageViews = threadView.getMessageViews();
-
     messageViews.forEach((messageView) => {
       const bodyElement = messageView.getBodyElement();
-      // Check if the message body contains a PGP block
       if (bodyElement.innerText.includes("-----BEGIN PGP MESSAGE-----")) {
-
         messageView.addToolbarButton({
           title: "Decrypt Message",
-          iconUrl: 'https://cdn.iconscout.com/icon/free/png-512/free-unlock-icon-svg-download-png-1213973.png',
+          iconUrl: 'https://cdn.iconscout.com/icon/premium/png-256-thumb/unlock-1763261-1499511.png',
           section: sdk.Conversations.MessageViewToolbarSectionNames.MORE,
           onClick: async (event) => {
-            // Find the specific DOM element containing the PGP block to replace it later
             const pgpBlockElement = Array.from(bodyElement.querySelectorAll('div, pre')).find(el => (el as HTMLElement).innerText.includes("-----BEGIN PGP MESSAGE-----")) as HTMLElement;
-
             if (pgpBlockElement) {
-              elementToDecrypt = pgpBlockElement; // Store a reference to the element
-              const armoredMessage = pgpBlockElement.innerText;
+              elementToDecrypt = pgpBlockElement;
+
+              const armoredMessage = normalizePgpBlock(pgpBlockElement.innerText);
+
+              if (!armoredMessage) {
+                pgpBlockElement.innerHTML = `<p style="font-family: sans-serif; color: red;"><b>Decryption Failed:</b> Could not find a valid PGP block after cleaning.</p>`;
+                return;
+              }
 
               pgpBlockElement.innerHTML = '<p style="font-family: sans-serif; color: #555;">Requesting decryption...</p>';
 
-              // Send the PGP block to the background for the first decryption attempt
               const response: PgpResponse = await chrome.runtime.sendMessage({
                 type: "PGP_DECRYPT_REQUEST",
                 payload: { armoredMessage }
               });
 
-              // If the background needs a password, it will tell us to open the popup
               if (response.error === 'password_required') {
+                // Use the specific message for the decryption flow
                 chrome.runtime.sendMessage({
                   type: "OPEN_POPUP_FOR_DECRYPT",
                   payload: { armoredMessage, keyFingerprint: response.keyFingerprint }
                 });
               } else if (!response.success) {
-                // Handle other immediate failures (e.g., no private key found)
                 elementToDecrypt.innerHTML = `<p style="font-family: sans-serif; color: red;"><b>Decryption Failed:</b> ${response.error}</p>`;
-                elementToDecrypt = null; // Clear reference on failure
+                elementToDecrypt = null;
               }
             }
           },
