@@ -271,9 +271,6 @@ export async function handlePerformDecryption(password: string) {
 
         const message = await openpgp.readMessage({ armoredMessage });
 
-        // =======================================================================
-        // --- FINAL FIX ---
-        // =======================================================================
         // The private key block from the vault is not passphrase-protected.
         // We only need to read it; we DO NOT need to call decryptKey.
         console.log("Reading the unencrypted private key object...");

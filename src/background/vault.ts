@@ -1,29 +1,19 @@
-import { Storage } from "@plasmohq/storage"; // Or import your own storage wrapper
+import { Storage } from "@plasmohq/storage";
 import { deriveKey, encrypt, decrypt, generateSalt } from "~lib/crypto/vault";
 import type { Vault, VaultEntry, KeyPair, Contact } from "~types/vault";
-import { storage } from "./index"; // Import shared storage instance
+import { storage } from "./index";
 
 /**
  * Securely stores derived key and vault data in memory.
- * Wipes sensitive data on lock.
  */
 export const securePasswordStore = {
-    _password: new Uint8Array(), // Temporary storage, wiped quickly
-    _salt: new Uint8Array(),     // Temporary storage, wiped quickly
     _derivedKey: null as CryptoKey | null,
     _vault: null as Vault | null,
 
     async setAndDerive(password: string, salt: string): Promise<void> {
-        const encoder = new TextEncoder();
+        console.log("[SecureStore] Deriving master key from password and salt...");
         this._derivedKey = await deriveKey(password, salt);
-
-        // The rest is for securely wiping temporary variables from memory
-        this._password = encoder.encode(password);
-        this._salt = encoder.encode(salt);
-        crypto.getRandomValues(this._password);
-        crypto.getRandomValues(this._salt);
-        this._password = new Uint8Array();
-        this._salt = new Uint8Array();
+        console.log("[SecureStore] Master key derived and stored in memory.");
     },
 
     getKey(): CryptoKey | null {
@@ -31,6 +21,7 @@ export const securePasswordStore = {
     },
 
     setVault(vault: Vault | null): void {
+        console.log("[SecureStore] In-memory vault has been updated.");
         this._vault = vault;
     },
 
@@ -39,50 +30,46 @@ export const securePasswordStore = {
     },
 
     async wipe(): Promise<void> {
-        // Overwrite sensitive data
-        if (this._vault) {
-            // Consider more robust wiping if needed, though JS GC is usually sufficient
-            this._vault = null;
-        }
-
-        // Key doesn't need overwriting since it's non-extractable by default
+        this._vault = null;
         this._derivedKey = null;
-
-        // Ensure temporary password/salt arrays were already cleared in setAndDerive
-        this._password = new Uint8Array();
-        this._salt = new Uint8Array();
-        console.log("Secure store wiped.");
+        console.log("[SecureStore] In-memory vault and derived key have been wiped.");
     }
 };
 
 // --- Vault Operation Handlers ---
 
 export async function handleUnlock(password: string) {
+    console.groupCollapsed(`[Vault] handleUnlock`);
     try {
-        console.log('Unlocking vault');
+        console.log("Fetching salt, iv, and encrypted vault from storage...");
         const salt = await storage.get<string>("salt");
         const encrypted = await storage.get<string>("vault");
         const iv = await storage.get<string>("iv");
 
         if (!salt || !encrypted || !iv) {
+            console.error("Required data not found in storage. Vault may not be initialized.");
+            console.groupEnd();
             return { success: false, error: "Vault not initialized or corrupted" };
         }
+        console.log("Data fetched. Proceeding with key derivation and decryption...");
 
         await securePasswordStore.setAndDerive(password, salt);
         const derivedKey = securePasswordStore.getKey();
 
         if (!derivedKey) {
-            // This should not happen if setAndDerive succeeded, but check anyway
-            throw new Error("Key derivation failed unexpectedly.");
+            throw new Error("Key derivation failed unexpectedly after setAndDerive.");
         }
 
         const decrypted = await decrypt(derivedKey, iv, encrypted);
+
         if (decrypted === null) {
+            console.warn("Vault decryption returned null. Password is likely incorrect.");
+            console.groupEnd();
             return { success: false, error: 'Bad password!' }
         }
-        const parsed = JSON.parse(decrypted); // Assuming decrypt returns string
+        console.log("Vault decrypted successfully. Reconstructing data structure...");
+        const parsed = JSON.parse(decrypted);
 
-        // Reconstruct the vault structure with Maps
         const reconstructedVault: Vault = { vault: new Map<string, VaultEntry>() };
         if (parsed.vault && Array.isArray(parsed.vault)) {
             for (const [email, entryData] of parsed.vault) {
@@ -93,11 +80,10 @@ export async function handleUnlock(password: string) {
 
                 if (entryData.keyPairs && Array.isArray(entryData.keyPairs)) {
                     for (const [keyId, keyPairData] of entryData.keyPairs) {
-                        // Rehydrate dates
                         const keyPair: KeyPair = {
                             ...keyPairData,
-                            dateCreated: new Date(keyPairData.dateCreated),
-                            dateExpire: keyPairData.dateExpire ? new Date(keyPairData.dateExpire) : null
+                            created: new Date(keyPairData.created), // Corrected rehydration
+                            expires: keyPairData.expires ? new Date(keyPairData.expires) : null
                         };
                         vaultEntry.keyPairs.set(keyId, keyPair);
                     }
@@ -105,8 +91,15 @@ export async function handleUnlock(password: string) {
 
                 if (entryData.contacts && Array.isArray(entryData.contacts)) {
                     for (const [contactId, contactData] of entryData.contacts) {
-                        // Add potential rehydration for contacts if needed
-                        vaultEntry.contacts.set(contactId, contactData);
+                        const contact: Contact = {
+                            ...contactData,
+                            publicKeys: contactData.publicKeys.map(pk => ({
+                                ...pk,
+                                created: new Date(pk.created)
+                            })),
+                            dateAdded: contactData.dateAdded ? new Date(contactData.dateAdded) : undefined,
+                        };
+                        vaultEntry.contacts.set(contactId, contact);
                     }
                 }
                 reconstructedVault.vault.set(email, vaultEntry);
@@ -114,25 +107,29 @@ export async function handleUnlock(password: string) {
         }
 
         securePasswordStore.setVault(reconstructedVault);
-
         console.log("Vault unlocked and loaded into memory.");
+        console.groupEnd();
         return { success: true, error: null };
 
     } catch (err) {
         console.error("Unlock failed:", err);
-        // Wipe any potentially derived key on failure
+        console.groupEnd();
         await securePasswordStore.wipe();
         return { success: false, error: "Decryption failed. Incorrect password?" };
     }
 }
 
 export async function handleInit(password: string) {
+    console.groupCollapsed(`[Vault] handleInit`);
     try {
         const existingSalt = await storage.get('salt');
         if (existingSalt) {
+            console.warn("Initialization attempted, but vault already exists.");
+            console.groupEnd();
             return { success: false, error: 'Vault already initialized (salt exists).' };
         }
 
+        console.log("Generating salt and deriving master key...");
         const salt = generateSalt();
         await securePasswordStore.setAndDerive(password, salt);
         const derivedKey = securePasswordStore.getKey();
@@ -141,37 +138,32 @@ export async function handleInit(password: string) {
             throw new Error("Key derivation failed during init.");
         }
 
-        // Create an empty vault structure
+        console.log("Creating and encrypting empty vault structure...");
         const emptyVault: Vault = { vault: new Map<string, VaultEntry>() };
-
-        // Convert Map to serializable format for encryption
         const serializableVault = {
-            vault: Array.from(emptyVault.vault.entries()) // Starts empty
+            vault: Array.from(emptyVault.vault.entries())
         };
+        const { ciphertext, iv } = await encrypt(derivedKey, JSON.stringify(serializableVault));
 
-        const { ciphertext, iv } = await encrypt(
-            derivedKey,
-            JSON.stringify(serializableVault)
-        );
-
+        console.log("Saving initial vault data to storage...");
         await storage.set('salt', salt);
         await storage.set('iv', iv);
         await storage.set('vault', ciphertext);
 
-        securePasswordStore.setVault(emptyVault); // Store the empty vault in memory
+        securePasswordStore.setVault(emptyVault);
 
         console.log("Vault initialized successfully.");
+        console.groupEnd();
         return { success: true, error: null };
 
     } catch (err) {
         console.error("Vault initialization failed:", err);
-        await securePasswordStore.wipe(); // Clean up on failure
+        console.groupEnd();
+        await securePasswordStore.wipe();
         return { success: false, error: `Initialization failed: ${err.message}` };
     }
 }
 
-
-// Renamed from handleEncrypt to avoid confusion with crypto's encrypt
 export async function handleEncryptAndStoreVault() {
     try {
         const derivedKey = securePasswordStore.getKey();
@@ -180,9 +172,8 @@ export async function handleEncryptAndStoreVault() {
         if (!derivedKey) throw new Error("Vault is locked. Cannot encrypt.");
         if (!vault) throw new Error("No vault data in memory to encrypt.");
 
-        console.log("Encrypting and storing vault...");
+        console.log("[Vault] Encrypting and storing current in-memory vault...");
 
-        // Convert current vault state to serializable format
         const serializableVault = {
             vault: Array.from(vault.vault.entries()).map(([email, entry]) => [
                 email,
@@ -193,20 +184,16 @@ export async function handleEncryptAndStoreVault() {
             ])
         };
 
-        const { ciphertext, iv } = await encrypt(
-            derivedKey,
-            JSON.stringify(serializableVault)
-        );
+        const { ciphertext, iv } = await encrypt(derivedKey, JSON.stringify(serializableVault));
 
         await storage.set("vault", ciphertext);
         await storage.set("iv", iv);
 
-        console.log("Vault encrypted and stored.");
+        console.log("[Vault] Vault encrypted and stored successfully.");
         return { success: true };
 
     } catch (error) {
-        console.error("Encryption failed:", error);
-        // Don't wipe here automatically, as the user might still be active
+        console.error("handleEncryptAndStoreVault failed:", error);
         return { success: false, error: "Encryption failed" };
     }
 }

@@ -17,7 +17,6 @@ let pendingEncryptionRequest: { payload: any, tabId: number } | null = null;
 
 export function routeMessage(request: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void): boolean | undefined {
     resetActivityTimer();
-
     switch (request.type) {
         // --- Basic Vault & User Ops ---
         case "UNLOCK":
@@ -33,8 +32,9 @@ export function routeMessage(request: any, sender: chrome.runtime.MessageSender,
             sendResponse(handleSetEmail(request.payload.email));
             return false;
         case "GET_EMAIL":
-            sendResponse(handleGetEmail());
-            return false;
+            handleGetEmail().then(sendResponse);
+            return true;
+
 
         // =======================================================================
         // --- Key & Contact Operations (Fully Implemented) ---

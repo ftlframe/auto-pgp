@@ -169,7 +169,7 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
   const userEmail = sdk.User.getEmailAddress();
   chrome.runtime.sendMessage({ type: 'SET_EMAIL', payload: { email: userEmail } });
 
-  chrome.runtime.onMessage.addListener((message) => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === "ENCRYPTION_RESULT" && lastActiveComposeView) {
       const composeView = lastActiveComposeView;
       const response = message.payload;
@@ -195,6 +195,11 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
     } else if (message.type === "SHOW_SELECTION_MODAL" && lastActiveComposeView) {
       showKeySelectionModal(sdk.Widgets, lastActiveComposeView, message.payload);
       lastActiveComposeView = null;
+    } else if (message.type === "REQUEST_EMAIL_ADDRESS") {
+      console.log("[ContentScript] Background script is requesting the current user's email.");
+      const currentEmail = sdk.User.getEmailAddress();
+      sendResponse({ success: true, email: currentEmail });
+      return true;
     }
   });
 

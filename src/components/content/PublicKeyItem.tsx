@@ -15,18 +15,18 @@ export default function PublicKeyItem({ contactEmail, keyInfo }) {
     };
 
     return (
-        <div className="flex justify-between items-center p-2 border-t border-gray-100">
+        <div className="flex justify-between items-center p-2 border-t border-gray-100 dark:border-gray-700">
             <div className="flex-1 min-w-0">
-                <p className="font-mono text-xs text-gray-700 truncate" title={keyInfo.fingerprint}>
+                <p className="font-mono text-xs text-gray-700 dark:text-gray-300 truncate" title={keyInfo.fingerprint}>
                     ...{keyInfo.fingerprint.slice(-16)}
                 </p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                     Created: {formatDate(keyInfo.created)}
                 </p>
             </div>
             <div className="flex space-x-2">
-                <button onClick={handleCopy} className="text-xs text-blue-600 hover:underline">Copy</button>
-                <button onClick={handleDelete} className="text-xs text-red-600 hover:underline">Delete</button>
+                <button onClick={handleCopy} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Copy</button>
+                <button onClick={handleDelete} className="text-xs text-red-600 dark:text-red-400 hover:underline">Delete</button>
             </div>
         </div>
     );

@@ -35,7 +35,6 @@ export async function deriveKey(password, salt): Promise<CryptoKey> {
         },
         keyMaterial,
         { name: "AES-GCM", length: 256 },
-        // true,
         false,
         ["encrypt", "decrypt"]
     );

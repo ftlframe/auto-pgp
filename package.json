@@ -10,6 +10,7 @@
     "package": "plasmo package"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@inboxsdk/core": "^2.2.7",
     "@plasmohq/storage": "^1.15.0",
     "openpgp": "^6.2.1",
