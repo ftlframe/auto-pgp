@@ -30,7 +30,7 @@ export async function deriveKey(password, salt): Promise<CryptoKey> {
         {
             name: "PBKDF2",
             salt: encoder.encode(salt),
-            iterations: 100000,
+            iterations: 600_000,
             hash: "SHA-256",
         },
         keyMaterial,

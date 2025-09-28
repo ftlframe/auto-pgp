@@ -118,8 +118,10 @@ export default function VaultProvider({ children }) {
     setIsUnlocked(false);
   }, []);
 
-  const generatePair = useCallback(async () => {
-    const response = await sendToBackground<{ success: boolean }>("GENERATE_KEYS", { payload: { email } });
+  const generatePair = useCallback(async (passphrase?: string) => {
+    const response = await sendToBackground<{ success: boolean }>(
+      "GENERATE_KEYS",
+      { payload: { email, passphrase} });
     if (response.success) await getKeys();
   }, [email, getKeys]);
 

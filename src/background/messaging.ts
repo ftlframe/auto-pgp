@@ -40,7 +40,7 @@ export function routeMessage(request: any, sender: chrome.runtime.MessageSender,
         // --- Key & Contact Operations (Fully Implemented) ---
         // =======================================================================
         case "GENERATE_KEYS":
-            handleKeyGenerate(request.payload.email).then(sendResponse);
+            handleKeyGenerate(request.payload).then(sendResponse);
             return true;
         case "GET_KEYS":
             handleGetKeys().then(sendResponse);
