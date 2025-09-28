@@ -13,6 +13,8 @@ export interface PublicKeyInfo {
 export interface KeyPair extends PublicKeyInfo {
     encryptedPrivateKey: string;
     iv: string;
+    encryptedPassphrase?: string;
+    ivPassphrase?: string;
 }
 
 export interface Contact {

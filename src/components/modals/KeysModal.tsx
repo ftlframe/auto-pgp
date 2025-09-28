@@ -8,12 +8,19 @@ export default function KeysModal({ isOpen, onClose, action }) {
     const { userKeys, email, generatePair } = useVault();
     const [isLoading, setIsLoading] = useState(false);
 
+    const [passphrase, setPassphrase] = useState("");
+    const [confirmPassphrase, setConfirmPassphrase] = useState("");
+
     if (!isOpen) return null;
 
     const handleGenerate = async () => {
+        if (passphrase !== confirmPassphrase) {
+            alert("Passphrases do not match.");
+            return;
+        }
         setIsLoading(true);
         try {
-            await generatePair();
+            await generatePair(passphrase);
             onClose(); // Close the modal on success
         } catch (error) {
             console.error("Key generation failed:", error);
@@ -40,6 +47,23 @@ export default function KeysModal({ isOpen, onClose, action }) {
                         <div>
                             <p className="mb-4 text-gray-700 dark:text-gray-300">This will generate a new PGP key pair for your email address: <strong className="text-purple-600 dark:text-purple-400">{email}</strong>.</p>
                             <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">This process may take a few seconds.</p>
+
+                            <div className="space-y-4 mb-6">
+                                <input
+                                    type="password"
+                                    value={passphrase}
+                                    onChange={e => setPassphrase(e.target.value)}
+                                    placeholder="Optional: PGP Key Passphrase"
+                                    className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 ..."
+                                />
+                                <input
+                                    type="password"
+                                    value={confirmPassphrase}
+                                    onChange={e => setConfirmPassphrase(e.target.value)}
+                                    placeholder="Confirm Passphrase"
+                                    className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 ..."
+                                />
+                            </div>
                             <button
                                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                                 onClick={handleGenerate}

@@ -1,12 +1,12 @@
 import * as openpgp from 'openpgp';
 
 // TODO: pass settings to the function
-export async function generatePGPKeyPair(email: string) {
+export async function generatePGPKeyPair(email: string, passphrase?: string) {
     const { privateKey, publicKey } = await openpgp.generateKey({
         type: 'rsa', // or 'ecc'
         rsaBits: 2048, // size of the RSA key
         userIDs: [{ email }],
-        passphrase: ''
+        passphrase: passphrase || ''
     });
 
     const fingerprint = await getFingerprint(publicKey)

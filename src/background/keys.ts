@@ -7,21 +7,36 @@ import { globalVars } from "./userState";
 // TODO: Import/export, think of how to do it
 
 
-export async function handleKeyGenerate(emailParam?: string) {
+export async function handleKeyGenerate(payload: { email?: string, passphrase?: string }) {
+    console.groupCollapsed("[Keys] handleKeyGenerate");
+    console.log("Received payload:", payload);
     try {
         const derivedKey = securePasswordStore.getKey();
         const currentVault = securePasswordStore.getVault();
         if (!derivedKey || !currentVault) {
-            return { success: false, error: "Vault is locked." };
+            throw new Error("Vault is locked.");
         }
 
-        const email = emailParam || globalVars.getEmail();
+        const email = payload.email || globalVars.getEmail();
         if (!email) {
-            return { success: false, error: "Email address is required." };
+            throw new Error("Email address is required.");
         }
+        console.log(`Generating key for ${email} with passphrase: ${payload.passphrase ? 'Yes' : 'No'}`);
 
-        const { publicKey, privateKey, fingerprint } = await generatePGPKeyPair(email);
+        // 1. Generate the PGP key, passing the passphrase to the library
+        const { publicKey, privateKey, fingerprint } = await generatePGPKeyPair(email, payload.passphrase);
+
+        // 2. Encrypt the private key with the user's master key
         const { ciphertext: encryptedPrivateKey, iv } = await encrypt(derivedKey, privateKey);
+
+        // 3. If a passphrase was provided, encrypt it with the master key as well
+        let encryptedPassphrase, ivPassphrase;
+        if (payload.passphrase) {
+            console.log("Encrypting provided PGP key passphrase for storage...");
+            const result = await encrypt(derivedKey, payload.passphrase);
+            encryptedPassphrase = result.ciphertext;
+            ivPassphrase = result.iv;
+        }
 
         let vaultEntry = currentVault.vault.get(email);
         if (!vaultEntry) {
@@ -29,22 +44,31 @@ export async function handleKeyGenerate(emailParam?: string) {
             currentVault.vault.set(email, vaultEntry);
         }
 
+        // 4. Create the new KeyPair object with all properties
         const newKeyPair: KeyPair = {
             fingerprint: fingerprint,
-            armoredKey: publicKey,      // Corrected from publicKey
+            armoredKey: publicKey,
+            created: new Date(),
+            expires: null,
             encryptedPrivateKey: encryptedPrivateKey,
             iv: iv,
-            created: new Date(),        // Corrected from dateCreated
-            expires: null
+            encryptedPassphrase: encryptedPassphrase,   // Will be undefined if no passphrase was used
+            ivPassphrase: ivPassphrase                  // Will be undefined if no passphrase was used
         };
 
         vaultEntry.keyPairs.set(fingerprint, newKeyPair);
         securePasswordStore.setVault(currentVault);
+
+        console.log("Saving new key pair to vault...");
         await handleEncryptAndStoreVault();
 
+        console.log(`Successfully generated and added key ${fingerprint}.`);
+        console.groupEnd();
         return { success: true, fingerprint: fingerprint };
+
     } catch (error) {
         console.error("Key generation failed:", error);
+        console.groupEnd();
         return { success: false, error: `Key generation failed: ${error.message}` };
     }
 }
