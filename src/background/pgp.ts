@@ -135,21 +135,24 @@ export async function handlePgpEncryptRequest(payload: {
         const decryptedPrivateKeyArmor = await decrypt(derivedKey, selectedUserKey.iv, selectedUserKey.encryptedPrivateKey);
         if (!decryptedPrivateKeyArmor) throw new Error("Failed to decrypt private key for signing.");
 
-        let keyPassphrase = ''; // Default to empty for keys made without a passphrase
-        if (selectedUserKey.encryptedPassphrase && selectedUserKey.ivPassphrase) {
-            console.log("Decrypting PGP key's own passphrase...");
-            const decryptedPass = await decrypt(derivedKey, selectedUserKey.ivPassphrase, selectedUserKey.encryptedPassphrase);
-            if (decryptedPass) {
-                keyPassphrase = decryptedPass;
-            }
-        }
+        let userPrivateKey; // This will hold the final, unlocked private key
 
-        console.log(`Unlocking signing key with its passphrase (length: ${keyPassphrase.length})...`);
-        const lockedPrivateKey = await openpgp.readPrivateKey({ armoredKey: decryptedPrivateKeyArmor });
-        const userPrivateKey = await openpgp.decryptKey({
-            privateKey: lockedPrivateKey,
-            passphrase: keyPassphrase // Use the dynamically retrieved passphrase
-        });
+        if (selectedUserKey.encryptedPassphrase && selectedUserKey.ivPassphrase) {
+            // --- KEY HAS A PASSPHRASE: Perform two-step unlock ---
+            console.log("Decrypting PGP key's own passphrase...");
+            const keyPassphrase = await decrypt(derivedKey, selectedUserKey.ivPassphrase, selectedUserKey.encryptedPassphrase);
+
+            console.log(`Unlocking signing key with its passphrase...`);
+            const lockedPrivateKey = await openpgp.readPrivateKey({ armoredKey: decryptedPrivateKeyArmor });
+            userPrivateKey = await openpgp.decryptKey({
+                privateKey: lockedPrivateKey,
+                passphrase: keyPassphrase || ''
+            });
+        } else {
+            // --- KEY HAS NO PASSPHRASE: Just read the unencrypted key ---
+            console.log("Reading unencrypted signing key...");
+            userPrivateKey = await openpgp.readPrivateKey({ armoredKey: decryptedPrivateKeyArmor });
+        }
 
         const message = await openpgp.createMessage({ text: payload.content });
 
@@ -183,9 +186,9 @@ export async function handlePgpEncryptRequest(payload: {
 // --- DECRYPTION LOGIC ---
 // =======================================================================
 
-let pendingDecryptionRequest: { armoredMessage: string, keyFingerprint: string, tabId: number } | null = null;
+let pendingDecryptionRequest: { armoredMessage: string, keyFingerprint: string, senderEmail: string, tabId: number } | null = null;
 
-export function storePendingDecryption(request: { armoredMessage: string, keyFingerprint: string, tabId: number }) {
+export function storePendingDecryption(request: { armoredMessage: string, keyFingerprint: string, senderEmail: string, tabId: number }) {
     pendingDecryptionRequest = request;
 }
 
@@ -193,7 +196,7 @@ export function getPendingDecryption() {
     return pendingDecryptionRequest;
 }
 
-export async function handlePgpDecryptRequest(payload: { armoredMessage: string }) {
+export async function handlePgpDecryptRequest(payload: { armoredMessage: string, senderEmail: string }) {
     console.groupCollapsed(`[PGP Decrypt] Phase 1: Analyzing message`);
     console.log("Received armored message:", payload.armoredMessage);
 
@@ -252,7 +255,7 @@ export async function handlePgpDecryptRequest(payload: { armoredMessage: string 
         console.log(`Found a matching private key in vault: ...${matchingKey.fingerprint.slice(-16)}`);
         console.log("Conclusion: Password is required to proceed.");
         console.groupEnd();
-        return { success: false, error: "password_required", keyFingerprint: matchingKey.fingerprint };
+        return { success: false, error: "password_required", keyFingerprint: matchingKey.fingerprint, senderEmail: payload.senderEmail };
 
     } catch (error) {
         console.error("Decryption analysis failed:", error);
@@ -270,7 +273,7 @@ export async function handlePerformDecryption(password: string) {
         return { success: false, error: "No pending decryption request found." };
     }
 
-    const { armoredMessage, keyFingerprint } = pendingDecryptionRequest;
+    const { armoredMessage, keyFingerprint, senderEmail } = pendingDecryptionRequest;
 
     try {
         console.log("Re-deriving master key from password...");
@@ -278,44 +281,76 @@ export async function handlePerformDecryption(password: string) {
         if (!salt) throw new Error("Salt not found.");
         const derivedKey = await deriveKey(password, salt);
 
-        console.log(`Finding private key with fingerprint: ...${keyFingerprint.slice(-16)}`);
         const userVaultEntry = securePasswordStore.getVault()?.vault.get(globalVars.getEmail());
-        const keyPairToUse = userVaultEntry?.keyPairs.get(keyFingerprint);
+        if (!userVaultEntry) throw new Error("Could not find user vault entry after unlock.");
+
+        console.log(`Finding private key with fingerprint: ...${keyFingerprint.slice(-16)}`);
+        const keyPairToUse = userVaultEntry.keyPairs.get(keyFingerprint);
         if (!keyPairToUse) throw new Error("Could not find the required private key after unlock.");
 
         console.log("Decrypting the PGP private key from vault...");
         const decryptedPrivateKeyArmor = await decrypt(derivedKey, keyPairToUse.iv, keyPairToUse.encryptedPrivateKey);
         if (!decryptedPrivateKeyArmor) throw new Error("Failed to decrypt private key. Master password may be incorrect.");
 
-        console.log("Reading the unencrypted private key object...");
-        let keyPassphrase = ''; // Default to empty
+        const message = await openpgp.readMessage({ armoredMessage });
+        let privateKey;
+
         if (keyPairToUse.encryptedPassphrase && keyPairToUse.ivPassphrase) {
             console.log("Decrypting PGP key's own passphrase...");
-            const decryptedPass = await decrypt(derivedKey, keyPairToUse.ivPassphrase, keyPairToUse.encryptedPassphrase);
-            if (decryptedPass) {
-                keyPassphrase = decryptedPass;
-            }
+            const keyPassphrase = await decrypt(derivedKey, keyPairToUse.ivPassphrase, keyPairToUse.encryptedPassphrase);
+            console.log(`Unlocking private key with its passphrase...`);
+            const lockedPrivateKey = await openpgp.readPrivateKey({ armoredKey: decryptedPrivateKeyArmor });
+            privateKey = await openpgp.decryptKey({
+                privateKey: lockedPrivateKey,
+                passphrase: keyPassphrase || ''
+            });
+        } else {
+            console.log("Reading unencrypted private key (no passphrase)...");
+            privateKey = await openpgp.readPrivateKey({ armoredKey: decryptedPrivateKeyArmor });
         }
 
-        console.log(`Unlocking private key with its passphrase (length: ${keyPassphrase.length})...`);
-        const lockedPrivateKey = await openpgp.readPrivateKey({ armoredKey: decryptedPrivateKeyArmor });
-        const privateKey = await openpgp.decryptKey({
-            privateKey: lockedPrivateKey,
-            passphrase: keyPassphrase // Use the dynamically retrieved passphrase
-        });
+        // --- SIGNATURE VERIFICATION LOGIC ---
+        console.log(`Looking for verification keys for sender: ${senderEmail}`);
+        const senderContact = userVaultEntry.contacts.get(senderEmail);
+        let verificationKeys: openpgp.Key[] = [];
+        if (senderContact && senderContact.publicKeys.length > 0) {
+            console.log(`-> Found ${senderContact.publicKeys.length} potential public key(s) for the sender.`);
+            verificationKeys = await Promise.all(
+                senderContact.publicKeys.map(pk => openpgp.readKey({ armoredKey: pk.armoredKey }))
+            );
+        } else {
+            console.log(`-> No public keys found in contacts for ${senderEmail}. Cannot verify signature.`);
+        }
 
-        const message = await openpgp.readMessage({ armoredMessage });
-
-        console.log("Performing final message decryption...");
-        const { data: decrypted } = await openpgp.decrypt({
+        console.log("Performing final message decryption and signature verification...");
+        const { data: decrypted, signatures } = await openpgp.decrypt({
             message,
-            decryptionKeys: privateKey
+            decryptionKeys: privateKey,
+            verificationKeys: verificationKeys
         });
+
+        // Check the result of the verification
+        let verification = { status: 'unsigned', text: "Message is not signed." };
+        if (signatures && signatures.length > 0) {
+            try {
+                await signatures[0].verified; // This promise resolves if valid
+                const signerKeyId = signatures[0].keyID.toHex();
+                verification = { status: 'valid', text: `✓ Verified Signature from ${senderEmail}` };
+                console.log(`Signature is VALID. Signed with key ID: ${signerKeyId}`);
+            } catch (e) {
+                verification = { status: 'invalid', text: `❌ WARNING: Invalid Signature! Message may have been tampered with.` };
+                console.error("Signature verification failed:", e);
+            }
+        } else {
+            console.log("Message was not signed.");
+        }
+        // --- END VERIFICATION LOGIC ---
 
         console.log("%cDecryption successful!", "color: green; font-weight: bold;");
         console.groupEnd();
         pendingDecryptionRequest = null;
-        return { success: true, decryptedContent: decrypted };
+        return { success: true, decryptedContent: decrypted, verification };
+
     } catch (error) {
         pendingDecryptionRequest = null;
         console.error("Final decryption failed:", error);

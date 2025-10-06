@@ -1,5 +1,6 @@
 import * as InboxSDK from "@inboxsdk/core";
 import type { PlasmoCSConfig } from "plasmo";
+import { send } from "process";
 import { formatDate } from "~lib/utils";
 
 export const config: PlasmoCSConfig = {
@@ -187,7 +188,22 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
     } else if (message.type === "DECRYPTION_RESULT" && elementToDecrypt) {
       const response = message.payload;
       if (response.success && response.decryptedContent) {
-        elementToDecrypt.innerHTML = `<blockquote style="font-family: sans-serif; white-space: pre-wrap; padding: 15px; border-left: 4px solid #ccc; background: #f9f9f9; margin: 10px 0;">${response.decryptedContent}</blockquote>`;
+        // --- NEW: Create a verification status banner ---
+        let verificationHTML = '';
+        if (response.verification) {
+          const color = response.verification.status === 'valid'
+            ? '#28a745' // green
+            : (response.verification.status === 'invalid' ? '#dc3545' : '#6c757d'); // red or gray
+
+          verificationHTML = `<div style="padding: 10px; border-left: 4px solid ${color}; background: #f8f9fa; margin-bottom: 15px; color: #333; font-family: sans-serif; font-size: 14px;">
+                <strong>${response.verification.text}</strong>
+            </div>`;
+        }
+
+        // Prepend the banner to the decrypted content
+        elementToDecrypt.innerHTML = verificationHTML +
+          `<blockquote style="font-family: sans-serif; white-space: pre-wrap; padding: 15px; border-left: 4px solid #ccc; background: #f9f9f9; margin: 10px 0;">${response.decryptedContent}</blockquote>`;
+
       } else {
         elementToDecrypt.innerHTML = `<p style="font-family: sans-serif; color: red;"><b>Decryption Failed:</b> ${response.error}</p>`;
       }
@@ -284,6 +300,8 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
               elementToDecrypt = pgpBlockElement;
 
               const armoredMessage = normalizePgpBlock(pgpBlockElement.innerText);
+              const sender = messageView.getSender().emailAddress;
+              console.log(sender)
 
               if (!armoredMessage) {
                 pgpBlockElement.innerHTML = `<p style="font-family: sans-serif; color: red;"><b>Decryption Failed:</b> Could not find a valid PGP block after cleaning.</p>`;
@@ -294,14 +312,17 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
 
               const response: PgpResponse = await chrome.runtime.sendMessage({
                 type: "PGP_DECRYPT_REQUEST",
-                payload: { armoredMessage }
+                payload: {
+                  armoredMessage,
+                  senderEmail: sender
+                }
               });
 
               if (response.error === 'password_required') {
                 // Use the specific message for the decryption flow
                 chrome.runtime.sendMessage({
                   type: "OPEN_POPUP_FOR_DECRYPT",
-                  payload: { armoredMessage, keyFingerprint: response.keyFingerprint }
+                  payload: { armoredMessage, keyFingerprint: response.keyFingerprint, senderEmail: sender }
                 });
               } else if (!response.success) {
                 elementToDecrypt.innerHTML = `<p style="font-family: sans-serif; color: red;"><b>Decryption Failed:</b> ${response.error}</p>`;

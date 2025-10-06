@@ -35,6 +35,17 @@
     ],
     "permissions": [
       "scripting"
+    ],
+    "web_accessible_resources": [
+      {
+        "resources": [
+          "@inboxsdk/core/pageWorld.js"
+        ],
+        "matches": [
+          "https://mail.google.com/*",
+          "https://inbox.google.com/*"
+        ]
+      }
     ]
   }
 }
