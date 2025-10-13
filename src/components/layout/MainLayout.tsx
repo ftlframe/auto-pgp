@@ -27,7 +27,6 @@ export function MainLayout() {
     const [activeTab, setActiveTab] = useState('overview');
     const vault = useVault();
     
-    // --- THIS IS THE DEFINITIVE DATA FETCHING LOGIC ---
     const { isUnlocked, getEmail, getKeys, getContacts } = vault;
     useEffect(() => {
         // This function will run reliably whenever isUnlocked changes to true.
@@ -46,7 +45,6 @@ export function MainLayout() {
         }
     // The dependency array is stable because the functions are wrapped in useCallback
     }, [isUnlocked, getEmail, getKeys, getContacts]);
-    // --- END FIX ---
 
     return (
         <div className="rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 h-full flex flex-col">

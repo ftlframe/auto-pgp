@@ -3,7 +3,7 @@ import {
     handlePgpDecryptRequest,
 } from './pgp';
 import { resetActivityTimer } from './session';
-import { handleUnlock, handleInit, handleEncryptAndStoreVault } from './vault';
+import { handleUnlock, handleInit } from './vault';
 import { handleLock } from './session';
 import { handleKeyGenerate, handleGetKeys, handleDeleteKey } from './keys';
 import { handleAddContact, handleGetContacts, handleDeleteContactKey } from './contacts';

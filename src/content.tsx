@@ -15,6 +15,7 @@ type PgpResponse = {
   success: boolean;
   encryptedContent?: string;
   decryptedContent?: string;
+  verification?: any;
   error?: string;
   payload?: any;
   keyFingerprint?: string;
@@ -327,6 +328,26 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
                 // Or directly if the vault was already unlocked.
                 elementToDecrypt.innerHTML = `<p><b>Decryption Failed:</b> ${response.error}</p>`;
 
+              } else {
+                // --- THIS IS THE MISSING SUCCESS CASE ---
+                // If the decryption was successful immediately (vault was unlocked)
+                console.log("[ContentScript] Decryption successful. Displaying content.");
+
+                let verificationHTML = '';
+                if (response.verification) {
+                  const color = response.verification.status === 'valid'
+                    ? '#28a745' // green
+                    : (response.verification.status === 'invalid' ? '#dc3545' : '#6c757d'); // red or gray
+
+                  verificationHTML = `<div style="padding: 10px; border-left: 4px solid ${color}; background: #f8f9fa; margin-bottom: 15px; color: #333; font-family: sans-serif; font-size: 14px;">
+                    <strong>${response.verification.text}</strong>
+                </div>`;
+                }
+
+                elementToDecrypt.innerHTML = verificationHTML +
+                  `<blockquote style="font-family: sans-serif; white-space: pre-wrap; padding: 15px; border-left: 4px solid #ccc; background: #f9f9f9; margin: 10px 0;">${response.decryptedContent}</blockquote>`;
+
+                elementToDecrypt = null; // Clear the reference
               }
             }
           },
