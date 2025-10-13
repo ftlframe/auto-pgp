@@ -8,7 +8,6 @@ import { handleLock } from './session';
 import { handleKeyGenerate, handleGetKeys, handleDeleteKey } from './keys';
 import { handleAddContact, handleGetContacts, handleDeleteContactKey } from './contacts';
 import { handleSetEmail, handleGetEmail } from './userState';
-import { securePasswordStore } from './vault';
 
 // A single variable to hold any action that is pending an unlock.
 let pendingActionInfo: { type: 'encrypt' | 'decrypt', payload: any, tabId: number } | null = null;
@@ -88,9 +87,14 @@ export function routeMessage(request: any, sender: chrome.runtime.MessageSender,
 
                 if (type === 'encrypt') {
                     handlePgpEncryptRequest(payload).then(response => {
+                        // If the retry results in needing a key selection, we must send the INNER payload.
+                        // Otherwise, for a final success/failure, we send the whole response.
+                        const messageType = response.error === 'key_selection_required' ? "SHOW_SELECTION_MODAL" : "ENCRYPTION_RESULT";
+                        const messagePayload = response.error === 'key_selection_required' ? response.payload : response;
+
                         chrome.tabs.sendMessage(tabId, {
-                            type: response.error === 'key_selection_required' ? "SHOW_SELECTION_MODAL" : "ENCRYPTION_RESULT",
-                            payload: response
+                            type: messageType,
+                            payload: messagePayload
                         });
                     });
                 } else if (type === 'decrypt') {
@@ -101,8 +105,6 @@ export function routeMessage(request: any, sender: chrome.runtime.MessageSender,
                 }
             }
             break;
-
-        // NOTE: GET_PENDING_ACTION and PERFORM_DECRYPTION are REMOVED.
 
         default:
             console.warn("Unknown message type received:", request.type);
