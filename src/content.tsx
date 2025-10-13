@@ -323,13 +323,8 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
                 // Use the unified prompt message
                 chrome.runtime.sendMessage({ type: "PROMPT_USER_UNLOCK" });
               } else if (!response.success) {
-                // Handle all other errors, like "password_required"
-                // This is now handled inside the DECRYPTION_NEEDS_PASSWORD case after a retry
-                // Or directly if the vault was already unlocked.
                 elementToDecrypt.innerHTML = `<p><b>Decryption Failed:</b> ${response.error}</p>`;
-
               } else {
-                // --- THIS IS THE MISSING SUCCESS CASE ---
                 // If the decryption was successful immediately (vault was unlocked)
                 console.log("[ContentScript] Decryption successful. Displaying content.");
 
