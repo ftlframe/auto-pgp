@@ -164,6 +164,7 @@ export async function handleInit(password: string) {
     }
 }
 
+
 export async function handleEncryptAndStoreVault() {
     try {
         const derivedKey = securePasswordStore.getKey();

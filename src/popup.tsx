@@ -4,15 +4,10 @@ import VaultProvider, { useVault, VaultContext } from "~contexts/VaultContext"
 import "~style.css"
 import { useEffect, useState } from "react"
 import { MainLayout } from "~components/layout/MainLayout";
-import { DecryptPrompt } from "~features/auth/DecryptPrompt";
 import ThemeProvider from "~contexts/ThemeContext"
 
 function IndexPopupContent() {
   const vault = useVault();
-
-  if (vault.pendingAction) {
-    return <DecryptPrompt />;
-  }
 
   if (vault.isUnlocked && vault.isLoading) {
     return (

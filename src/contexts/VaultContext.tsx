@@ -21,8 +21,6 @@ export const VaultContext = createContext<{
   getContacts: () => Promise<Contact[]>;
   addContact: (contact: NewContactData) => Promise<any>;
   deleteContactKey: (contactEmail: string, keyFingerprint: string) => Promise<any>;
-  pendingAction: any;
-  performDecryption: (password: string) => Promise<any>;
   debugDumpVault: () => void;
 }>({
   isUnlocked: null, isLoading: true, email: null, userKeys: null, contacts: [],
@@ -36,8 +34,6 @@ export const VaultContext = createContext<{
   getContacts: async () => [],
   addContact: async () => { },
   deleteContactKey: async () => { },
-  pendingAction: null,
-  performDecryption: async () => { },
   debugDumpVault: () => { },
 });
 
@@ -53,7 +49,6 @@ export default function VaultProvider({ children }) {
   const [email, setEmail] = useState('');
   const [userKeys, setUserKeys] = useState<PublicKeyInfo[] | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [pendingAction, setPendingAction] = useState(null);
 
   const getEmail = useCallback(async () => {
     const response = await sendToBackground<{ success: boolean, email: string }>("GET_EMAIL");
@@ -146,18 +141,12 @@ export default function VaultProvider({ children }) {
     return response;
   }, [email, getContacts]);
 
-  const performDecryption = useCallback(async (password: string) => {
-    return sendToBackground("PERFORM_DECRYPTION", { payload: { password } });
-  }, []);
 
   const debugDumpVault = useCallback(() => {
     chrome.runtime.sendMessage({ type: "DEBUG_DUMP_VAULT" });
   }, []);
 
   useEffect(() => {
-    chrome.runtime.sendMessage({ type: "GET_PENDING_ACTION" }, (response) => {
-      if (response) setPendingAction(response);
-    });
     const port = chrome.runtime.connect({ name: "vault-ui" });
     return () => port.disconnect();
   }, []);
@@ -167,8 +156,7 @@ export default function VaultProvider({ children }) {
     unlockVault, lockVault, initVault,
     generatePair, getKeys, deleteKey,
     getContacts, addContact, getEmail,
-    deleteContactKey, pendingAction,
-    performDecryption, debugDumpVault
+    deleteContactKey, debugDumpVault
   };
 
   return (

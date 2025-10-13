@@ -263,7 +263,7 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
 
         if (response.error === 'vault_locked') {
           // Use the specific message for the encryption flow
-          chrome.runtime.sendMessage({ type: "OPEN_POPUP_FOR_UNLOCK" });
+          chrome.runtime.sendMessage({ type: "PROMPT_USER_UNLOCK" });
           compose.setBodyText(originalBody);
           return;
         } else if (response.error === 'key_selection_required') {
@@ -318,15 +318,15 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
                 }
               });
 
-              if (response.error === 'password_required') {
-                // Use the specific message for the decryption flow
-                chrome.runtime.sendMessage({
-                  type: "OPEN_POPUP_FOR_DECRYPT",
-                  payload: { armoredMessage, keyFingerprint: response.keyFingerprint, senderEmail: sender }
-                });
+              if (response.error === 'vault_locked') {
+                // Use the unified prompt message
+                chrome.runtime.sendMessage({ type: "PROMPT_USER_UNLOCK" });
               } else if (!response.success) {
-                elementToDecrypt.innerHTML = `<p style="font-family: sans-serif; color: red;"><b>Decryption Failed:</b> ${response.error}</p>`;
-                elementToDecrypt = null;
+                // Handle all other errors, like "password_required"
+                // This is now handled inside the DECRYPTION_NEEDS_PASSWORD case after a retry
+                // Or directly if the vault was already unlocked.
+                elementToDecrypt.innerHTML = `<p><b>Decryption Failed:</b> ${response.error}</p>`;
+
               }
             }
           },
