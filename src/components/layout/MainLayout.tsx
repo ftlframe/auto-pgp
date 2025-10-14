@@ -9,29 +9,28 @@ import { useVault } from "~contexts/VaultContext";
 export function MainLayout() {
     const [activeTab, setActiveTab] = useState('overview');
     const vault = useVault();
-    const { colorScheme } = useTheme(); // Get the current color scheme
-
-    // This robust useEffect hook fetches all necessary data once the vault is unlocked.
+    const { colorScheme } = useTheme();
     const { isUnlocked, getEmail, getKeys, getContacts } = vault;
+
     useEffect(() => {
         async function fetchInitialData() {
-            await Promise.all([
-                getEmail(),
-                getKeys(),
-                getContacts()
-            ]);
+            if (isUnlocked) {
+                await Promise.all([getEmail(), getKeys(), getContacts()]);
+            }
         }
-        // Only fetch data if the vault is unlocked.
-        if (isUnlocked) {
-            fetchInitialData();
-        }
+        fetchInitialData();
     }, [isUnlocked, getEmail, getKeys, getContacts]);
 
-    // Define color classes based on the selected scheme for a dynamic UI
-    const accentColor = colorScheme === 'purple' ? 'purple' : 'kiwi';
-    const activeTabClasses = `border-b-2 border-${accentColor}-500 text-${accentColor}-600 dark:text-${accentColor}-400 font-semibold`;
+    // Define complete class strings based on color scheme
+    const activeTabClasses = colorScheme === 'purple'
+        ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400 font-semibold'
+        : 'border-b-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-semibold';
+
     const inactiveTabClasses = 'text-gray-500 hover:text-gray-700 dark:hover:text-slate-300';
-    const headerTextClasses = `text-2xl font-bold text-${accentColor}-600 dark:text-${accentColor}-400 truncate pr-2`;
+
+    const headerTextClasses = colorScheme === 'purple'
+        ? 'text-2xl font-bold text-purple-600 dark:text-purple-400 truncate pr-2'
+        : 'text-2xl font-bold text-emerald-600 dark:text-emerald-400 truncate pr-2';
 
     return (
         <div className="bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-slate-200 h-full flex flex-col">
@@ -41,7 +40,6 @@ export function MainLayout() {
                         <h1 className={headerTextClasses}>
                             Auto-PGP {vault.email ? `- ${vault.email}` : ''}
                         </h1>
-                        {/* The theme toggle button is now correctly located in the SettingsTab */}
                     </div>
                     <nav className="flex space-x-8 border-b border-gray-200 dark:border-slate-700">
                         <button
