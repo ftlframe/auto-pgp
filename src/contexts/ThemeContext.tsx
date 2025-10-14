@@ -2,39 +2,42 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { Storage } from "@plasmohq/storage";
 
 type Theme = 'light' | 'dark';
+type ColorScheme = 'purple' | 'kiwi';
 
 type ThemeContextType = {
     theme: Theme;
     toggleTheme: () => void;
+    colorScheme: ColorScheme;
+    setColorScheme: (scheme: ColorScheme) => void;
 };
 
-// Create the context with a default value
 export const ThemeContext = createContext<ThemeContextType>({
     theme: 'light',
-    toggleTheme: () => console.warn('no theme provider'),
+    toggleTheme: () => { },
+    colorScheme: 'purple',
+    setColorScheme: () => { },
 });
 
 const storage = new Storage();
 
-// Create the provider component
 export default function ThemeProvider({ children }) {
     const [theme, setTheme] = useState<Theme>('light');
+    const [colorScheme, setColorSchemeState] = useState<ColorScheme>('purple');
 
-    // This effect runs once on startup to load the saved theme from storage
+    // Load saved theme and color scheme on startup
     useEffect(() => {
-        const loadTheme = async () => {
+        const loadSettings = async () => {
             const savedTheme = await storage.get<Theme>('theme');
-            if (savedTheme) {
-                setTheme(savedTheme);
-            }
+            const savedColorScheme = await storage.get<ColorScheme>('colorScheme');
+            if (savedTheme) setTheme(savedTheme);
+            if (savedColorScheme) setColorSchemeState(savedColorScheme);
         };
-        loadTheme();
+        loadSettings();
     }, []);
 
-    // This effect applies the 'dark' class to the main HTML element when the theme changes
+    // Apply 'dark' class to HTML element
     useEffect(() => {
         const root = document.documentElement;
-        // --- ADDED LOG ---
         if (theme === 'dark') {
             root.classList.add('dark');
         } else {
@@ -44,12 +47,16 @@ export default function ThemeProvider({ children }) {
 
     const toggleTheme = () => {
         const newTheme = theme === 'light' ? 'dark' : 'light';
-        // --- ADDED LOG ---
         setTheme(newTheme);
         storage.set('theme', newTheme);
     };
 
-    const value = { theme, toggleTheme };
+    const setColorScheme = (scheme: ColorScheme) => {
+        setColorSchemeState(scheme);
+        storage.set('colorScheme', scheme);
+    };
+
+    const value = { theme, toggleTheme, colorScheme, setColorScheme };
 
     return (
         <ThemeContext.Provider value={value}>
@@ -58,7 +65,6 @@ export default function ThemeProvider({ children }) {
     );
 }
 
-// Create a custom hook for easy access to the context
 export const useTheme = () => {
     return useContext(ThemeContext);
 };

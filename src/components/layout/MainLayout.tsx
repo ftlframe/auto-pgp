@@ -2,87 +2,65 @@ import { useEffect, useState } from "react";
 import ContactTab from "~components/content/ContactsTab";
 import KeysTab from "~components/content/KeysTab";
 import { OverviewTab } from "~components/content/OverviewTabs";
+import SettingsTab from "~components/content/SettingsTab";
 import { useTheme } from "~contexts/ThemeContext";
 import { useVault } from "~contexts/VaultContext";
-import { SunIcon, MoonIcon } from "@heroicons/react/24/solid";
-
-const ThemeToggleButton = () => {
-    const { theme, toggleTheme } = useTheme();
-    return (
-        <button
-            onClick={toggleTheme}
-            className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 dark:focus:ring-offset-gray-800"
-            title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
-        >
-            {theme === 'dark' ? (
-                <SunIcon className="h-5 w-5" />
-            ) : (
-                <MoonIcon className="h-5 w-5" />
-            )}
-        </button>
-    )
-}
 
 export function MainLayout() {
     const [activeTab, setActiveTab] = useState('overview');
     const vault = useVault();
-    
+    const { colorScheme } = useTheme(); // Get the current color scheme
+
+    // This robust useEffect hook fetches all necessary data once the vault is unlocked.
     const { isUnlocked, getEmail, getKeys, getContacts } = vault;
     useEffect(() => {
-        // This function will run reliably whenever isUnlocked changes to true.
         async function fetchInitialData() {
-            console.log("[MainLayout] Vault is unlocked. Fetching all initial data...");
-            await Promise.all([
-                getEmail(),
-                getKeys(),
-                getContacts()
-            ]);
-            console.log("[MainLayout] Initial data fetch complete.");
+            await Promise.all([getEmail(), getKeys(), getContacts()]);
         }
-
         if (isUnlocked) {
             fetchInitialData();
         }
-    // The dependency array is stable because the functions are wrapped in useCallback
     }, [isUnlocked, getEmail, getKeys, getContacts]);
 
+    // Define color classes based on the selected scheme for a dynamic UI
+    const accentColor = colorScheme === 'purple' ? 'purple' : 'emerald';
+    const activeTabClasses = `border-b-2 border-${accentColor}-500 text-${accentColor}-600 dark:text-${accentColor}-400 font-semibold`;
+    const inactiveTabClasses = 'text-gray-500 hover:text-gray-700 dark:hover:text-slate-300';
+
     return (
-        <div className="rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 h-full flex flex-col">
-            <header className="bg-white dark:bg-gray-900 shadow-sm flex-shrink-0">
+        <div className="rounded-lg bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-slate-200 h-full flex flex-col">
+            <header className="bg-white dark:bg-slate-800 shadow-sm flex-shrink-0">
                 <div className="mx-auto px-4 py-4">
                     <div className="flex justify-between items-center mb-4">
-                        <h1 className="text-2xl font-bold text-purple-600 dark:text-purple-400 truncate pr-2">
-                            Auto-PGP {vault.email ? `- ${vault.email}` : ''}
+                        <h1 className={`text-2xl font-bold text-${accentColor}-600 dark:text-${accentColor}-400 truncate pr-2`}>
+                            auto-PGP {vault.email ? `- ${vault.email}` : ''}
                         </h1>
-                        <ThemeToggleButton />
+                        {/* The theme toggle button is now located in the SettingsTab */}
                     </div>
-                    <nav className="flex space-x-8 border-b border-gray-200 dark:border-gray-700">
+                    <nav className="flex space-x-8 border-b border-gray-200 dark:border-slate-700">
                         <button
-                            className={`pb-2 px-1 text-sm font-medium ${activeTab === 'overview'
-                                ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400 font-semibold'
-                                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                                }`}
+                            className={`pb-2 px-1 text-sm font-medium ${activeTab === 'overview' ? activeTabClasses : inactiveTabClasses}`}
                             onClick={() => setActiveTab('overview')}
                         >
                             Overview
                         </button>
                         <button
-                            className={`pb-2 px-1 text-sm font-medium ${activeTab === 'keys'
-                                ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400 font-semibold'
-                                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                                }`}
+                            className={`pb-2 px-1 text-sm font-medium ${activeTab === 'keys' ? activeTabClasses : inactiveTabClasses}`}
                             onClick={() => setActiveTab('keys')}
                         >
                             Keys
                         </button>
                         <button
-                            className={`pb-2 px-1 text-sm font-medium ${activeTab === 'contacts'
-                                ? 'border-b-2 border-purple-500 text-purple-600 dark:text-purple-400 font-semibold'
-                                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                                }`}
+                            className={`pb-2 px-1 text-sm font-medium ${activeTab === 'contacts' ? activeTabClasses : inactiveTabClasses}`}
                             onClick={() => setActiveTab('contacts')}
                         >
                             Contacts
+                        </button>
+                        <button
+                            className={`pb-2 px-1 text-sm font-medium ${activeTab === 'settings' ? activeTabClasses : inactiveTabClasses}`}
+                            onClick={() => setActiveTab('settings')}
+                        >
+                            Settings
                         </button>
                     </nav>
                 </div>
@@ -92,6 +70,7 @@ export function MainLayout() {
                     {activeTab === 'overview' && <OverviewTab />}
                     {activeTab === 'keys' && <KeysTab />}
                     {activeTab === 'contacts' && <ContactTab />}
+                    {activeTab === 'settings' && <SettingsTab />}
                 </div>
             </main>
         </div>
