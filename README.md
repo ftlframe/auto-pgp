@@ -1,33 +1,110 @@
-This is a [Plasmo extension](https://docs.plasmo.com/) project bootstrapped with [`plasmo init`](https://www.npmjs.com/package/plasmo).
+# Auto-PGP for Gmail
 
-## Getting Started
+[![built with Plasmo](https://img.shields.io/badge/built%20with-Plasmo-blue.svg)](https://www.plasmo.com)
 
-First, run the development server:
+**Auto-PGP** is a browser extension that seamlessly integrates PGP (Pretty Good Privacy) encryption and decryption into the Gmail interface. It provides a secure, user-friendly way to manage PGP keys, handle contacts, and send/receive encrypted emails directly within Gmail.
 
-```bash
-pnpm dev
-# or
-npm run dev
-```
+The core of the extension is a secure, master password-protected vault that stores all your PGP keys and contact information locally on your machine.
 
-Open your browser and load the appropriate development build. For example, if you are developing for the chrome browser, using manifest v3, use: `build/chrome-mv3-dev`.
+---
 
-You can start editing the popup by modifying `popup.tsx`. It should auto-update as you make changes. To add an options page, simply add a `options.tsx` file to the root of the project, with a react component default exported. Likewise to add a content page, add a `content.ts` file to the root of the project, importing some module and do some logic, then reload the extension on your browser.
+## ✨ Features
 
-For further guidance, [visit our Documentation](https://docs.plasmo.com/)
+* **Secure Local Vault**: All sensitive data (private keys, contacts, key passphrases) is encrypted with a master password and stored locally. The vault auto-locks after a period of inactivity for enhanced security.
+* **Seamless Gmail Integration**: Adds "Encrypt" and "Decrypt" buttons directly into the Gmail UI using the InboxSDK for a native feel.
+* **Full Key Management**:
+    * Generate new PGP key pairs.
+    * Add optional passphrases to individual keys for an extra layer of security (defense-in-depth).
+    * View your keys, copy public keys to the clipboard, and delete them.
+* **Contact Management**:
+    * Save your contacts and their public PGP keys for easy, secure communication.
+    * The system gracefully handles contacts with multiple public keys by prompting you to choose during encryption.
+    * Edit and delete contacts and their associated keys.
+* **Seamless "Unlock & Retry" Workflow**: If you try to encrypt or decrypt a message while your vault is locked, the extension automatically opens the login prompt and seamlessly resumes the action after you unlock the vault, without requiring a second password prompt.
+* **Signature Verification**: When decrypting a message, the extension also verifies the sender's digital signature to ensure the message is authentic and has not been tampered with, displaying a clear status banner.
+* **Light & Dark Mode**: A clean, modern UI with a persistent theme toggle for user comfort.
 
-## Making production build
 
-Run the following:
 
-```bash
-pnpm build
-# or
-npm run build
-```
+---
 
-This should create a production bundle for your extension, ready to be zipped and published to the stores.
+## 🚀 Getting Started
 
-## Submit to the webstores
+Follow these instructions to set up the development environment on your local machine.
 
-The easiest way to deploy your Plasmo extension is to use the built-in [bpp](https://bpp.browser.market) GitHub action. Prior to using this action however, make sure to build your extension and upload the first version to the store to establish the basic credentials. Then, simply follow [this setup instruction](https://docs.plasmo.com/framework/workflows/submit) and you should be on your way for automated submission!
+### Prerequisites
+
+* [Node.js](https://nodejs.org/en/) (v16.x or later)
+* [pnpm](https://pnpm.io/installation) package manager
+
+### 1. Obtain an InboxSDK App ID
+
+Before you can run the extension, you need a free App ID from InboxSDK.
+
+1.  Go to the [InboxSDK signup page](https://www.inboxsdk.com/register).
+2.  Register your application. You can use a placeholder like `http://localhost` for the URL during development.
+3.  You will receive an App ID string.
+
+### 2. Environment Setup
+
+1.  **Clone the repository:**
+    ```bash
+    git clone <your-repository-url>
+    cd auto-pgp
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    pnpm install
+    ```
+
+3.  **Create the environment file:**
+    Create a file named `.env.local` in the root of the project directory.
+
+4.  **Add the App ID to the environment file:**
+    Inside `.env.local`, add your InboxSDK App ID like this. **Replace the placeholder** with your actual ID.
+    ```
+    PLASMO_PUBLIC_INBOX_SDK_APP_ID=your_inboxsdk_app_id_here
+    ```
+
+---
+
+## 💻 Running in Development
+
+1.  **Start the development server:**
+    ```bash
+    pnpm dev
+    ```
+    This will create a `build/chrome-mv3-dev` directory with the unpacked extension files.
+
+2.  **Load the extension in Chrome:**
+    * Open Chrome and navigate to `chrome://extensions`.
+    * Turn on "Developer mode" in the top right corner.
+    * Click "Load unpacked".
+    * Select the `build/chrome-mv3-dev` directory from your project.
+
+The extension will now be active. As you make changes to the source code, the development server will automatically update the files. You can simply reload the extension or the Gmail tab to see the changes.
+
+---
+
+## 📦 Building for Production
+
+When you are ready to create a production-ready version of the extension:
+
+1.  **Run the build command:**
+    ```bash
+    pnpm build
+    ```
+    This will generate an optimized production build in the `build/chrome-mv3-prod` directory.
+
+2.  **Package for the store:**
+    ```bash
+    pnpm package
+    ```
+    This will create a `build/chrome-mv3-prod.zip` file, which is ready to be uploaded to the Chrome Web Store.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License.

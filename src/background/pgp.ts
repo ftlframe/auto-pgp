@@ -1,10 +1,9 @@
 import * as openpgp from 'openpgp';
-import { decrypt, deriveKey } from '~lib/crypto/vault';
-import type { Contact, KeyPair, PublicKeyInfo } from '~types/vault';
+import { decrypt } from '~lib/crypto/vault';
+import type { KeyPair } from '~types/vault';
 import { handleAddContact } from './contacts';
 import { globalVars } from './userState';
 import { securePasswordStore } from './vault';
-import { storage } from '~background';
 
 export let pendingEncryptionRequest: any = null;
 
