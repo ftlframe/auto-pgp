@@ -2,55 +2,51 @@ import { useEffect, useState } from "react";
 import { useVault } from "~contexts/VaultContext";
 
 export function LoginScreen() {
-    const vault = useVault()
-    const isFirstTime = localStorage.getItem('first_time') ? false : true;
+    const { attemptLogin } = useVault();
+    const [password, setPassword] = useState("");
+    const [error, setError] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
 
     const handleSubmit = async (e) => {
-
-        // Check for salt in storage if it exists -> not first time
         e.preventDefault();
-        try {
-            if (isFirstTime) {
-                vault.initVault(e.target.password.value)
-            }
-            else {
-                vault.unlockVault(e.target.password.value);
-            }
+        setError("");
 
-        }
-        catch (error) {
-            console.log(error)
+        if (password.length > 0) {
+            setIsLoading(true);
+            const result = await attemptLogin(password);
+            if (!result.success) {
+                setError(result.error || "Login failed.");
+            }
+            // If successful, the context will handle setting isUnlocked,
+            // and the UI will automatically switch to the MainLayout.
+            setIsLoading(false);
         }
     }
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
-            <form onSubmit={handleSubmit} className="bg-white shadow-xl rounded-2xl p-6 w-80">
-                {isFirstTime ? (
-                    <div className="mb-4">
-                        <p className="text-lg font-semibold text-purple-700">Set the master password...</p>
-                        <p className="text-sm text-gray-600">
-                            Don&apos;t share it with anyone. It will be used to decrypt your personal vault.
-                        </p>
-                    </div>
-                ) : (
-                    <p className="text-lg font-semibold text-purple-700 mb-4">
-                        Enter your master password to unlock the vault
-                    </p>
-                )}
-                <input
-                    type="password"
-                    name="password"
-                    className="w-full p-2 mb-4 text-gray-800 bg-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
-                    placeholder="Master Password"
-                />
-                <button
-                    type="submit"
-                    className="w-full py-2 text-white bg-purple-600 rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-400"
-                >
-                    {isFirstTime ? "Set" : "Unlock"}
-                </button>
-            </form>
+        <div className="flex items-center justify-center h-full bg-gray-100 dark:bg-gray-900 p-4">
+            <div className="bg-white dark:bg-gray-800 shadow-xl rounded-2xl p-6 w-80 text-center">
+                <h2 className="text-lg font-semibold text-purple-700 dark:text-purple-400">
+                    Welcome to Auto-PGP
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 mb-4">
+                    Enter your master password to continue. If this is your first time, a new vault will be created.
+                </p>
+                <form onSubmit={handleSubmit}>
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full p-2 mb-4 text-gray-800 dark:text-gray-200 bg-gray-200 dark:bg-gray-700 rounded-lg"
+                        placeholder="Master Password"
+                        autoFocus
+                    />
+                    {error && <p className="text-red-500 dark:text-red-400 text-sm my-4">{error}</p>}
+                    <button type="submit" disabled={isLoading} className="w-full py-2 text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50">
+                        {isLoading ? "..." : "Continue"}
+                    </button>
+                </form>
+            </div>
         </div>
     );
 }

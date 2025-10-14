@@ -3,7 +3,7 @@ import {
     handlePgpDecryptRequest,
 } from './pgp';
 import { resetActivityTimer } from './session';
-import { handleUnlock, handleInit } from './vault';
+import { handleUnlock, handleInit, handleLoginAttempt } from './vault';
 import { handleLock } from './session';
 import { handleKeyGenerate, handleGetKeys, handleDeleteKey } from './keys';
 import { handleAddContact, handleGetContacts, handleDeleteContactKey } from './contacts';
@@ -17,14 +17,11 @@ export function routeMessage(request: any, sender: chrome.runtime.MessageSender,
 
     switch (request.type) {
         // --- Basic Vault & User Ops ---
-        case "UNLOCK":
-            handleUnlock(request.payload.password).then(sendResponse);
+        case "ATTEMPT_LOGIN":
+            handleLoginAttempt(request.payload.password).then(sendResponse);
             return true;
         case "LOCK":
             handleLock().then(sendResponse);
-            return true;
-        case "INIT_VAULT":
-            handleInit(request.payload.password).then(sendResponse);
             return true;
         case "SET_EMAIL":
             sendResponse(handleSetEmail(request.payload.email));

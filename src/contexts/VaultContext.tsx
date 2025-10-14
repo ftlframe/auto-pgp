@@ -11,9 +11,8 @@ export const VaultContext = createContext<{
   email: string | null;
   userKeys: PublicKeyInfo[] | null;
   contacts: Contact[];
-  unlockVault: (password: string) => Promise<UnlockResult>;
+  attemptLogin: (password: string) => Promise<UnlockResult>;
   lockVault: () => Promise<void>;
-  initVault: (password: string) => Promise<void>;
   generatePair: (passphrase: string) => Promise<void>;
   getEmail: () => Promise<void>;
   getKeys: () => Promise<void>;
@@ -24,9 +23,8 @@ export const VaultContext = createContext<{
   debugDumpVault: () => void;
 }>({
   isUnlocked: null, isLoading: true, email: null, userKeys: null, contacts: [],
-  unlockVault: async () => ({ success: false, error: "Not implemented" }),
+  attemptLogin: async () => ({ success: false, error: "Not implemented" }),
   lockVault: async () => { },
-  initVault: async () => { },
   generatePair: async () => { },
   getEmail: async () => { },
   getKeys: async () => { },
@@ -69,44 +67,25 @@ export default function VaultProvider({ children }) {
     return [];
   }, []);
 
-  const initVault = useCallback(async (password: string) => {
-    console.groupCollapsed("[VaultContext] initVault");
+  const attemptLogin = useCallback(async (password: string): Promise<UnlockResult> => {
     setIsLoading(true);
+    let response: UnlockResult = { success: false, error: "An unknown error occurred." };
     try {
-      const response = await sendToBackground<{ success: boolean; error?: string; }>("INIT_VAULT", { payload: { password } });
-      if (!response.success) throw new Error(response.error || "Vault initialization failed");
-
-      localStorage.setItem('first_time', 'false');
-      await Promise.all([getEmail(), getKeys(), getContacts()]);
-      setIsUnlocked(true);
-    } catch (error) {
-      console.error("-> Vault initialization error:", error);
-    } finally {
-      setIsLoading(false);
-      console.groupEnd();
-    }
-  }, [getEmail, getKeys, getContacts]);
-
-  const unlockVault = useCallback(async (password: string): Promise<UnlockResult> => {
-    console.groupCollapsed("[VaultContext] unlockVault");
-    setIsLoading(true);
-    let response: UnlockResult;
-    try {
-      response = await sendToBackground<UnlockResult>("UNLOCK", { payload: { password } });
+      response = await sendToBackground<UnlockResult>("ATTEMPT_LOGIN", { payload: { password } });
       if (response.success) {
-        await Promise.all([getEmail(), getKeys(), getContacts()]);
         setIsUnlocked(true);
+        // The rest of your data fetching logic
+        await Promise.all([getEmail(), getKeys(), getContacts()]);
         chrome.runtime.sendMessage({ type: "RETRY_PENDING_ACTION" });
       }
     } catch (error) {
-      console.error("-> Unlock error:", error);
-      response = { success: false, error: "An unexpected error occurred." };
+      console.error("-> Login attempt error:", error);
+      response.error = error.message;
     } finally {
       setIsLoading(false);
-      console.groupEnd();
     }
     return response;
-  }, [getEmail, getKeys, getContacts]);
+  }, [getEmail, getKeys, getContacts, sendToBackground]);
 
   const lockVault = useCallback(async () => {
     await sendToBackground("LOCK");
@@ -116,7 +95,7 @@ export default function VaultProvider({ children }) {
   const generatePair = useCallback(async (passphrase?: string) => {
     const response = await sendToBackground<{ success: boolean }>(
       "GENERATE_KEYS",
-      { payload: { email, passphrase} });
+      { payload: { email, passphrase } });
     if (response.success) await getKeys();
   }, [email, getKeys]);
 
@@ -152,8 +131,8 @@ export default function VaultProvider({ children }) {
   }, []);
 
   const vault = {
-    isUnlocked, isLoading, email, userKeys, contacts,
-    unlockVault, lockVault, initVault,
+    isUnlocked, isLoading, email,
+    userKeys, contacts, lockVault, attemptLogin,
     generatePair, getKeys, deleteKey,
     getContacts, addContact, getEmail,
     deleteContactKey, debugDumpVault

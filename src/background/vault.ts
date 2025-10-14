@@ -36,6 +36,22 @@ export const securePasswordStore = {
     }
 };
 
+
+// --- Login ---
+export async function handleLoginAttempt(password: string) {
+    const salt = await storage.get<string>("salt");
+
+    if (salt) {
+        // If salt exists, the vault is already initialized. Attempt to unlock.
+        console.log("[Vault] Salt found. Attempting to unlock existing vault...");
+        return handleUnlock(password);
+    } else {
+        // If no salt, this is the first time. Initialize a new vault.
+        console.log("[Vault] No salt found. Initializing new vault...");
+        return handleInit(password);
+    }
+}
+
 // --- Vault Operation Handlers ---
 
 export async function handleUnlock(password: string) {
