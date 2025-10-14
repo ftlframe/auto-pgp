@@ -57,6 +57,16 @@ export async function handleLoginAttempt(password: string) {
 export async function handleUnlock(password: string) {
     console.groupCollapsed(`[Vault] handleUnlock`);
     try {
+        const now = Date.now();
+        const lockoutUntil = await storage.get<number>('lockoutUntil') || 0;
+
+        if (now < lockoutUntil) {
+            const waitTime = Math.ceil((lockoutUntil - now) / 1000);
+            console.warn(`[Security] Login attempt during lockout period. Remaining: ${waitTime}s`);
+            console.groupEnd();
+            return { success: false, error: `Too many failed attempts. Please wait ${waitTime} seconds.` };
+        }
+
         console.log("Fetching salt, iv, and encrypted vault from storage...");
         const salt = await storage.get<string>("salt");
         const encrypted = await storage.get<string>("vault");
@@ -79,10 +89,25 @@ export async function handleUnlock(password: string) {
         const decrypted = await decrypt(derivedKey, iv, encrypted);
 
         if (decrypted === null) {
+            const failedAttempts = (await storage.get<number>('failedAttempts') || 0) + 1;
+            console.warn(`[Security] Failed login attempt #${failedAttempts}.`);
+            await storage.set('failedAttempts', failedAttempts);
+
+            if (failedAttempts >= 5) {
+                const oneMinuteFromNow = Date.now() + 60000; // Lock for 60 seconds
+                await storage.set('lockoutUntil', oneMinuteFromNow);
+                await storage.remove('failedAttempts'); // Reset counter after lockout is set
+                console.error("[Security] Lockout threshold reached. Locking for 1 minute.");
+            }
+
             console.warn("Vault decryption returned null. Password is likely incorrect.");
             console.groupEnd();
-            return { success: false, error: 'Bad password!' }
+            return { success: false, error: 'Bad password!' };
         }
+        console.log("[Security] Successful login. Resetting failure counters.");
+        await storage.remove('failedAttempts');
+        await storage.remove('lockoutUntil');
+
         console.log("Vault decrypted successfully. Reconstructing data structure...");
         const parsed = JSON.parse(decrypted);
 

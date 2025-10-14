@@ -2,12 +2,15 @@ import { useState } from "react";
 import { useVault } from "~contexts/VaultContext";
 import { formatDate } from "~lib/utils";
 import type { PublicKeyInfo } from "~types/vault";
-import { XMarkIcon } from "@heroicons/react/24/solid"; // Using an icon for the close button
+import { XMarkIcon } from "@heroicons/react/24/solid";
+import { useTheme } from "~contexts/ThemeContext";
+import { useSettings } from "~contexts/SettingsContent";
 
 export default function KeysModal({ isOpen, onClose, action }) {
     const { userKeys, email, generatePair } = useVault();
+    const { settings } = useSettings(); // Get the current PGP settings
+    const { colorScheme } = useTheme(); // Get the current color scheme
     const [isLoading, setIsLoading] = useState(false);
-
     const [passphrase, setPassphrase] = useState("");
     const [confirmPassphrase, setConfirmPassphrase] = useState("");
 
@@ -20,8 +23,9 @@ export default function KeysModal({ isOpen, onClose, action }) {
         }
         setIsLoading(true);
         try {
-            await generatePair(passphrase);
-            onClose(); // Close the modal on success
+            // Pass both the passphrase and the current settings to the generatePair function
+            await generatePair(passphrase, settings);
+            onClose();
         } catch (error) {
             console.error("Key generation failed:", error);
             alert("Key generation failed. See the console for more details.");
@@ -30,13 +34,21 @@ export default function KeysModal({ isOpen, onClose, action }) {
         }
     };
 
+    const primaryButtonClasses = colorScheme === 'purple'
+        ? 'bg-purple-600 hover:bg-purple-700'
+        : 'bg-kiwi hover:bg-kiwi-dark';
+
+    const settingsText = settings.keyType === 'rsa'
+        ? `RSA (${settings.rsaBits} bits)`
+        : 'ECC';
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-                <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+                <div className="p-6 border-b border-gray-200 dark:border-slate-700">
                     <div className="flex justify-between items-center">
-                        <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 capitalize">{action} Key</h3>
-                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                        <h3 className="text-xl font-semibold text-gray-900 dark:text-slate-100 capitalize">{action} Key</h3>
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200">
                             <XMarkIcon className="h-6 w-6" />
                         </button>
                     </div>
@@ -45,8 +57,14 @@ export default function KeysModal({ isOpen, onClose, action }) {
                 <div className="p-6 overflow-y-auto">
                     {action === "Generate" && (
                         <div>
-                            <p className="mb-4 text-gray-700 dark:text-gray-300">This will generate a new PGP key pair for your email address: <strong className="text-purple-600 dark:text-purple-400">{email}</strong>.</p>
-                            <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">This process may take a few seconds.</p>
+                            <p className="mb-2 text-gray-700 dark:text-slate-300">This will generate a new PGP key pair for <strong className={`font-semibold ${colorScheme === 'purple' ? 'text-purple-600' : 'text-kiwi-dark'} dark:${colorScheme === 'purple' ? 'text-purple-400' : 'text-kiwi'}`}>{email}</strong> using your current settings.</p>
+                            <p className="mb-6 text-sm text-gray-500 dark:text-slate-400">This process may take a few seconds.</p>
+
+                            <div className="p-3 mb-6 bg-gray-100 dark:bg-slate-700 rounded-md text-sm">
+                                <p className="text-gray-600 dark:text-slate-300">
+                                    Current Algorithm: <strong className="text-gray-800 dark:text-slate-100">{settingsText}</strong>. You can change this in the extension's options page.
+                                </p>
+                            </div>
 
                             <div className="space-y-4 mb-6">
                                 <input
@@ -54,18 +72,19 @@ export default function KeysModal({ isOpen, onClose, action }) {
                                     value={passphrase}
                                     onChange={e => setPassphrase(e.target.value)}
                                     placeholder="Optional: PGP Key Passphrase"
-                                    className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 ..."
+                                    className="w-full p-2 border rounded bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-slate-100 border-gray-300 dark:border-slate-600 focus:ring-kiwi focus:border-kiwi"
                                 />
                                 <input
                                     type="password"
                                     value={confirmPassphrase}
                                     onChange={e => setConfirmPassphrase(e.target.value)}
                                     placeholder="Confirm Passphrase"
-                                    className="w-full p-2 border rounded bg-gray-50 dark:bg-gray-700 ..."
+                                    className="w-full p-2 border rounded bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-slate-100 border-gray-300 dark:border-slate-600 focus:ring-kiwi focus:border-kiwi"
                                 />
                             </div>
+
                             <button
-                                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                                className={`px-4 py-2 text-white rounded-lg disabled:opacity-50 flex items-center justify-center ${primaryButtonClasses}`}
                                 onClick={handleGenerate}
                                 disabled={isLoading}
                             >
@@ -82,41 +101,14 @@ export default function KeysModal({ isOpen, onClose, action }) {
 
                     {(action === "Export" || action === "Import") && (
                         <div>
-                            <p className="mb-4 text-gray-700 dark:text-gray-300">Please select a key to {action.toLowerCase()}.</p>
-                            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                    <thead className="bg-gray-50 dark:bg-gray-700/50">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fingerprint</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Created</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Expires</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                        {(userKeys || []).map((key) => (
-                                            <tr key={key.fingerprint} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100 font-mono" title={key.fingerprint}>...{key.fingerprint?.slice(-16) ?? 'N/A'}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{formatDate(key.created)}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{formatDate(key.expires)}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                    <button className="text-blue-600 dark:text-blue-400 hover:underline">
-                                                        {action}
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                            {action === "Import" && <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">Import functionality is not yet implemented.</p>}
+                            <p className="mb-4 text-gray-700 dark:text-slate-300">This feature is not yet implemented.</p>
                         </div>
                     )}
                 </div>
 
-                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700 mt-auto">
+                <div className="p-4 bg-gray-50 dark:bg-slate-900/50 border-t border-gray-200 dark:border-slate-700 mt-auto">
                     <div className="flex justify-end">
-                        <button onClick={onClose} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600">Close</button>
+                        <button onClick={onClose} className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-700 hover:bg-gray-100 dark:hover:bg-slate-600">Close</button>
                     </div>
                 </div>
             </div>

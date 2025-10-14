@@ -1,13 +1,14 @@
 import { generatePGPKeyPair } from "~lib/crypto/keys";
 import { encrypt } from "~lib/crypto/vault";
-import type { Vault, VaultEntry, KeyPair } from "~types/vault";
+import type { KeyPair } from "~types/vault";
 import { handleEncryptAndStoreVault, securePasswordStore } from "./vault";
 import { globalVars } from "./userState";
+import type { AppSettings } from "~contexts/SettingsContent";
 
 // TODO: Import/export, think of how to do it
 
 
-export async function handleKeyGenerate(payload: { email?: string, passphrase?: string }) {
+export async function handleKeyGenerate(payload: { email?: string, passphrase?: string, settings?: Partial<AppSettings>}) {
     console.groupCollapsed("[Keys] handleKeyGenerate");
     console.log("Received payload:", payload);
     try {

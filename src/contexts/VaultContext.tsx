@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import type { Contact, PublicKeyInfo } from "~types/vault";
 import { Storage } from "@plasmohq/storage";
+import type { AppSettings } from "./SettingsContent";
 
 type NewContactData = { name: string, email: string, publicKeyArmored: string };
 type UnlockResult = { success: boolean; error?: string; };
@@ -13,7 +14,7 @@ export const VaultContext = createContext<{
   contacts: Contact[];
   attemptLogin: (password: string) => Promise<UnlockResult>;
   lockVault: () => Promise<void>;
-  generatePair: (passphrase: string) => Promise<void>;
+  generatePair: (passphrase: string, settings?: Partial<AppSettings>) => Promise<void>;
   getEmail: () => Promise<void>;
   getKeys: () => Promise<void>;
   deleteKey: (keyID: string) => Promise<void>;
@@ -92,12 +93,14 @@ export default function VaultProvider({ children }) {
     setIsUnlocked(false);
   }, []);
 
-  const generatePair = useCallback(async (passphrase?: string) => {
+  const generatePair = useCallback(async (passphrase?: string, settings?: Partial<AppSettings>) => {
+    console.log("Requesting key pair generation with settings:", settings);
     const response = await sendToBackground<{ success: boolean }>(
       "GENERATE_KEYS",
-      { payload: { email, passphrase } });
+      { payload: { email, passphrase, settings } }
+    );
     if (response.success) await getKeys();
-  }, [email, getKeys]);
+  }, [email, getKeys, sendToBackground]);
 
   const deleteKey = useCallback(async (keyId: string) => {
     const response = await sendToBackground<{ success: boolean }>("DELETE_KEY", { payload: { keyId, email } });

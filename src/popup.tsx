@@ -5,6 +5,7 @@ import "~style.css"
 import { useEffect, useState } from "react"
 import { MainLayout } from "~components/layout/MainLayout";
 import ThemeProvider from "~contexts/ThemeContext"
+import SettingsProvider from "~contexts/SettingsContent";
 
 function IndexPopupContent() {
   const vault = useVault();
@@ -26,9 +27,11 @@ function IndexPopup() {
   return (
     <div className="w-[450px] h-[550px]">
       <ThemeProvider>
-        <VaultProvider>
-          <IndexPopupContent />
-        </VaultProvider>
+        <SettingsProvider>
+          <VaultProvider>
+            <IndexPopupContent />
+          </VaultProvider>
+        </SettingsProvider>
       </ThemeProvider>
 
     </div>
