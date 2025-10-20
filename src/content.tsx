@@ -169,6 +169,9 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
   let lastActiveComposeView: InboxSDK.ComposeView | null = null;
   let elementToDecrypt: HTMLElement | null = null;
 
+  let elementToUpdate: HTMLElement | null = null;
+  let decryptionPayload: { armoredMessage: string, senderEmail: string } | null = null;
+
   const userEmail = sdk.User.getEmailAddress();
   chrome.runtime.sendMessage({ type: 'SET_EMAIL', payload: { email: userEmail } });
 
@@ -187,29 +190,26 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
         composeView.setBodyText(errorMessage + originalBody);
       }
       lastActiveComposeView = null;
-    } else if (message.type === "DECRYPTION_RESULT" && elementToDecrypt) {
-      const response = message.payload;
-      if (response.success && response.decryptedContent) {
-        // --- NEW: Create a verification status banner ---
-        let verificationHTML = '';
-        if (response.verification) {
-          const color = response.verification.status === 'valid'
-            ? '#28a745' // green
-            : (response.verification.status === 'invalid' ? '#dc3545' : '#6c757d'); // red or gray
-
-          verificationHTML = `<div style="padding: 10px; border-left: 4px solid ${color}; background: #f8f9fa; margin-bottom: 15px; color: #333; font-family: sans-serif; font-size: 14px;">
+    } else if (message.type === "DECRYPTION_RESULT") {
+      // Use the "remembered" element to display the result
+      if (elementToUpdate) {
+        const response = message.payload;
+        if (response.success && response.decryptedContent) {
+          let verificationHTML = '';
+          if (response.verification) {
+            const color = response.verification.status === 'valid' ? '#28a745' : (response.verification.status === 'invalid' ? '#dc3545' : '#6c757d');
+            verificationHTML = `<div style="padding: 10px; border-left: 4px solid ${color}; background: #f8f9fa; margin-bottom: 15px; color: #333; font-family: sans-serif; font-size: 14px;">
                 <strong>${response.verification.text}</strong>
             </div>`;
+          }
+          elementToUpdate.innerHTML = verificationHTML + `<blockquote>${response.decryptedContent}</blockquote>`;
+        } else {
+          elementToUpdate.innerHTML = `<p style="font-family: sans-serif; color: red;"><b>Decryption Failed:</b> ${response.error}</p>`;
         }
-
-        // Prepend the banner to the decrypted content
-        elementToDecrypt.innerHTML = verificationHTML +
-          `<blockquote style="font-family: sans-serif; white-space: pre-wrap; padding: 15px; border-left: 4px solid #ccc; background: #f9f9f9; margin: 10px 0;">${response.decryptedContent}</blockquote>`;
-
-      } else {
-        elementToDecrypt.innerHTML = `<p style="font-family: sans-serif; color: red;"><b>Decryption Failed:</b> ${response.error}</p>`;
+        // Clear the state after use
+        elementToUpdate = null;
+        decryptionPayload = null;
       }
-      elementToDecrypt = null;
     } else if (message.type === "SHOW_SELECTION_MODAL" && lastActiveComposeView) {
       showKeySelectionModal(sdk.Widgets, lastActiveComposeView, message.payload);
       lastActiveComposeView = null;
@@ -288,73 +288,59 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
   });
 
   sdk.Conversations.registerMessageViewHandler((messageView) => {
-    console.log('Registered message')
-    // --- THIS IS THE FIX ---
-    // We must wait for the individual message view (including its toolbar)
-    // to be fully loaded and rendered before we try to add a button.
     messageView.on('load', () => {
-
       const bodyElement = messageView.getBodyElement();
-      // Check if the body contains a PGP block.
       if (bodyElement && bodyElement.innerText.includes("-----BEGIN PGP MESSAGE-----")) {
 
-        // Now it is safe to add the button
-        messageView.addToolbarButton({
-          title: "Decrypt Message",
-          iconUrl: 'https://cdn.iconscout.com/icon/premium/png-256-thumb/unlock-1763261-1499511.png',
-          section: sdk.Conversations.MessageViewToolbarSectionNames.MORE,
-          onClick: async (event) => {
+        const pgpBlockElement = Array.from(bodyElement.querySelectorAll('div, pre')).find(el => (el as HTMLElement).innerText.includes("-----BEGIN PGP MESSAGE-----")) as HTMLElement;
+        if (pgpBlockElement) {
+          const armoredMessage = normalizePgpBlock(pgpBlockElement.innerText);
+          const sender = messageView.getSender().emailAddress;
 
-            const pgpBlockElement = Array.from(bodyElement.querySelectorAll('div, pre')).find(el => (el as HTMLElement).innerText.includes("-----BEGIN PGP MESSAGE-----")) as HTMLElement;
-            if (pgpBlockElement) {
-              elementToDecrypt = pgpBlockElement;
-              const armoredMessage = normalizePgpBlock(pgpBlockElement.innerText);
-              const sender = messageView.getSender().emailAddress;
-
-              if (!armoredMessage) {
-                pgpBlockElement.innerHTML = `<p style="font-family: sans-serif; color: red;"><b>Decryption Failed:</b> Could not find a valid PGP block after cleaning.</p>`;
-                return;
-              }
-
-              pgpBlockElement.innerHTML = '<p style="font-family: sans-serif; color: #555;">Requesting decryption...</p>';
-
-              const response: PgpResponse = await chrome.runtime.sendMessage({
-                type: "PGP_DECRYPT_REQUEST",
-                payload: {
-                  armoredMessage,
-                  senderEmail: sender
-                }
-              });
-
-              if (response.error === 'vault_locked') {
-                chrome.runtime.sendMessage({ type: "PROMPT_USER_UNLOCK" });
-              } else if (!response.success) {
-                elementToDecrypt.innerHTML = `<p><b>Decryption Failed:</b> ${response.error}</p>`;
-              } else {
-                // If the decryption was successful immediately (vault was unlocked)
-                console.log("[ContentScript] Decryption successful. Displaying content.");
-
-                let verificationHTML = '';
-                if (response.verification) {
-                  const color = response.verification.status === 'valid'
-                    ? '#28a745' // green
-                    : (response.verification.status === 'invalid' ? '#dc3545' : '#6c757d'); // red or gray
-
-                  verificationHTML = `<div style="padding: 10px; border-left: 4px solid ${color}; background: #f8f9fa; margin-bottom: 15px; color: #333; font-family: sans-serif; font-size: 14px;">
-                                    <strong>${response.verification.text}</strong>
-                                </div>`;
-                }
-
-                elementToDecrypt.innerHTML = verificationHTML +
-                  `<blockquote style="font-family: sans-serif; white-space: pre-wrap; padding: 15px; border-left: 4px solid #ccc; background: #f9f9f9; margin: 10px 0;">${response.decryptedContent}</blockquote>`;
-
-                elementToDecrypt = null; // Clear the reference
-              }
-            }
-          },
-        });
+          if (armoredMessage) {
+            // "Remember" this message.
+            decryptionPayload = { armoredMessage, senderEmail: sender };
+            elementToUpdate = pgpBlockElement;
+            console.log("[Auto-PGP] Detected and 'remembered' a PGP message from:", sender);
+          }
+        }
       }
     });
+  });
+
+  sdk.Toolbars.registerThreadButton({
+    title: "Decrypt Message",
+    iconUrl: 'https://cdn.iconscout.com/icon/premium/png-512-thumb/unlock-icon-svg-download-png-6742649.png',
+    threadSection: sdk.Toolbars.SectionNames.METADATA_STATE,
+    onClick: async (event) => {
+      // TASK 3: When clicked, use the "remembered" data.
+
+      elementToUpdate.innerHTML = '<p style="font-family: sans-serif; color: #555;">Requesting decryption...</p>';
+
+      const response: PgpResponse = await chrome.runtime.sendMessage({
+        type: "PGP_DECRYPT_REQUEST",
+        payload: decryptionPayload
+      });
+
+      // Handle all possible responses directly
+      if (response.error === 'vault_locked') {
+        chrome.runtime.sendMessage({ type: "PROMPT_USER_UNLOCK" });
+      } else if (!response.success) {
+        elementToUpdate.innerHTML = `<p style="font-family: sans-serif; color: red;"><b>Decryption Failed:</b> ${response.error}</p>`;
+        elementToUpdate = null; // Clear state on failure
+        decryptionPayload = null;
+      } else {
+        // Decryption was successful immediately (vault was already unlocked)
+        let verificationHTML = '';
+        if (response.verification) {
+          const color = response.verification.status === 'valid' ? '#28a745' : (response.verification.status === 'invalid' ? '#dc3545' : '#6c757d');
+          verificationHTML = `<div style="padding: 10px; border-left: 4px solid ${color}; ...">${response.verification.text}</div>`;
+        }
+        elementToUpdate.innerHTML = verificationHTML + `<blockquote>${response.decryptedContent}</blockquote>`;
+        elementToUpdate = null; // Clear state on success
+        decryptionPayload = null;
+      }
+    },
   });
 });
 
