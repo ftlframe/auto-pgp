@@ -1,7 +1,7 @@
 {
   "name": "auto-pgp",
-  "displayName": "Auto pgp",
-  "version": "0.0.1",
+  "displayName": "auto-PGP",
+  "version": "1.0.0",
   "description": "Chrome extension that automatically encrypts/decrypts messages...",
   "author": "fltframe@mailfence.com",
   "scripts": {
