@@ -1,6 +1,7 @@
 import {
     handlePgpEncryptRequest,
     handlePgpDecryptRequest,
+    handleManualDecrypt,
 } from './pgp';
 import { resetActivityTimer } from './session';
 import { handleUnlock, handleInit, handleLoginAttempt } from './vault';
@@ -102,7 +103,11 @@ export function routeMessage(request: any, sender: chrome.runtime.MessageSender,
                 }
             }
             break;
-
+        case "DECRYPT_MANUAL":
+            handleManualDecrypt(request.payload.armoredMessage, request.payload.senderEmail)
+                .then(sendResponse);
+            return true;
+            
         default:
             console.warn("Unknown message type received:", request.type);
             break;

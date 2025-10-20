@@ -200,14 +200,14 @@ export async function handlePgpDecryptRequest(payload: { armoredMessage: string,
             console.groupEnd();
             return { success: false, error: "vault_locked" };
         }
-        
+
         const userVaultEntry = unlockedVault.vault.get(currentUserEmail);
         if (!userVaultEntry) throw new Error("Could not find user vault entry.");
 
         // --- Step 2: Find the correct private key ---
         const encryptedMessage = await openpgp.readMessage({ armoredMessage });
         const requiredKeyIds = encryptedMessage.getEncryptionKeyIDs().map(keyId => keyId.toHex().toUpperCase());
-        
+
         const userPrivateKeys = Array.from(userVaultEntry.keyPairs.values());
         let matchingKey: KeyPair | undefined;
         for (const keyPair of userPrivateKeys) {
@@ -241,13 +241,13 @@ export async function handlePgpDecryptRequest(payload: { armoredMessage: string,
         if (senderContact?.publicKeys.length > 0) {
             verificationKeys = await Promise.all(senderContact.publicKeys.map(pk => openpgp.readKey({ armoredKey: pk.armoredKey })));
         }
-        
+
         const { data: decrypted, signatures } = await openpgp.decrypt({
             message: encryptedMessage,
             decryptionKeys: privateKey,
             verificationKeys: verificationKeys
         });
-        
+
         let verification = { status: 'unsigned', text: "Message is not signed." };
         if (signatures?.length > 0) {
             try {
@@ -257,7 +257,7 @@ export async function handlePgpDecryptRequest(payload: { armoredMessage: string,
                 verification = { status: 'invalid', text: `❌ WARNING: Invalid Signature! Message may have been tampered with.` };
             }
         }
-        
+
         console.log("%cDecryption and verification successful!", "color: green; font-weight: bold;");
         console.groupEnd();
         return { success: true, decryptedContent: decrypted, verification };
@@ -265,6 +265,103 @@ export async function handlePgpDecryptRequest(payload: { armoredMessage: string,
     } catch (error) {
         console.error("Decryption failed:", error);
         console.groupEnd();
+        return { success: false, error: error.message };
+    }
+}
+
+export async function handleManualDecrypt(armoredMessage: string, senderEmail: string) {
+    console.groupCollapsed(`[PGP Decrypt] Manual Decrypt Attempt`);
+    try {
+        // Step 1: Get the Master Key from memory (vault is already unlocked)
+        const derivedKey = securePasswordStore.getKey();
+        if (!derivedKey) {
+            throw new Error("Vault is locked. Cannot perform manual decryption.");
+        }
+
+        // Step 2: Get all user's private keys from the in-memory vault
+        const vault = securePasswordStore.getVault();
+        if (!vault) throw new Error("Vault not loaded in memory.");
+
+        const currentUserEmail = globalVars.getEmail();
+        const userVaultEntry = vault.vault.get(currentUserEmail);
+        if (!userVaultEntry) throw new Error("Could not find user vault entry.");
+
+        let allPrivateKeys: KeyPair[] = [];
+        for (const entry of vault.vault.values()) {
+            allPrivateKeys.push(...entry.keyPairs.values());
+        }
+
+        if (allPrivateKeys.length === 0) {
+            throw new Error("No private keys found in your vault to decrypt with.");
+        }
+
+        // Step 3: Decrypt and unlock all available private keys
+        const unlockedPrivateKeys = await Promise.all(
+            allPrivateKeys.map(async (keyPair) => {
+                const armoredKey = await decrypt(derivedKey, keyPair.iv, keyPair.encryptedPrivateKey);
+                if (!armoredKey) return null;
+
+                const key = await openpgp.readPrivateKey({ armoredKey });
+                if (keyPair.encryptedPassphrase && keyPair.ivPassphrase) {
+                    const pass = await decrypt(derivedKey, keyPair.ivPassphrase, keyPair.encryptedPassphrase);
+                    return openpgp.decryptKey({ privateKey: key, passphrase: pass || '' });
+                }
+                return key;
+            })
+        );
+
+        const validKeys = unlockedPrivateKeys.filter(k => k !== null);
+        if (validKeys.length === 0) {
+            throw new Error("Failed to unlock any of your private keys.");
+        }
+
+        // --- STEP 4: Decrypt & VERIFY ---
+        const message = await openpgp.readMessage({ armoredMessage });
+
+        // --- VERIFICATION LOGIC ---
+        console.log(`Looking for verification keys for sender: ${senderEmail}`);
+        let verificationKeys: openpgp.Key[] = [];
+        if (senderEmail) { // Only attempt verification if an email is provided
+            const senderContact = userVaultEntry.contacts.get(senderEmail);
+            if (senderContact && senderContact.publicKeys.length > 0) {
+                console.log(`-> Found ${senderContact.publicKeys.length} potential public key(s) for the sender.`);
+                verificationKeys = await Promise.all(
+                    senderContact.publicKeys.map(pk => openpgp.readKey({ armoredKey: pk.armoredKey }))
+                );
+            } else {
+                console.log(`-> No public keys found in contacts for ${senderEmail}. Cannot verify signature.`);
+            }
+        }
+        // --- END VERIFICATION LOGIC ---
+
+        const { data: decrypted, signatures } = await openpgp.decrypt({
+            message,
+            decryptionKeys: validKeys,
+            verificationKeys: verificationKeys
+        });
+
+        // Check the result of the verification
+        let verification = { status: 'unsigned', text: "Message is not signed." };
+        if (signatures?.length > 0) {
+            try {
+                await signatures[0].verified;
+                verification = { status: 'valid', text: `✓ Verified Signature from ${senderEmail}` };
+            } catch (e) {
+                verification = { status: 'invalid', text: `❌ WARNING: Invalid Signature! Message may have been tampered with.` };
+            }
+        }
+
+
+        console.log("%cManual Decryption successful!", "color: green; font-weight: bold;");
+        console.groupEnd();
+        return { success: true, decryptedContent: decrypted, verification };
+
+    } catch (error) {
+        console.error("Manual decryption failed:", error);
+        console.groupEnd();
+        if (error.message.includes("Error decrypting message")) {
+            return { success: false, error: "Decryption failed. You may not have the correct private key for this message." };
+        }
         return { success: false, error: error.message };
     }
 }
