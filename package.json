@@ -11,9 +11,9 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
-    "@inboxsdk/core": "^2.2.7",
+    "@inboxsdk/core": "^2.2.8",
     "@plasmohq/storage": "^1.15.0",
-    "openpgp": "^6.2.1",
+    "openpgp": "^6.2.2",
     "plasmo": "0.90.3",
     "react": "18.2.0",
     "react-dom": "18.2.0",

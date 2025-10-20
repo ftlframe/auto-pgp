@@ -1,4 +1,5 @@
 import * as InboxSDK from "@inboxsdk/core";
+import GmailThreadView from "@inboxsdk/core/src/platform-implementation-js/dom-driver/gmail/views/gmail-thread-view";
 import type { PlasmoCSConfig } from "plasmo";
 import { send } from "process";
 import { formatDate } from "~lib/utils";
@@ -286,23 +287,29 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
     });
   });
 
-  sdk.Conversations.registerThreadViewHandler((threadView) => {
-    const messageViews = threadView.getMessageViews();
-    messageViews.forEach((messageView) => {
+  sdk.Conversations.registerMessageViewHandler((messageView) => {
+    console.log('Registered message')
+    // --- THIS IS THE FIX ---
+    // We must wait for the individual message view (including its toolbar)
+    // to be fully loaded and rendered before we try to add a button.
+    messageView.on('load', () => {
+
       const bodyElement = messageView.getBodyElement();
-      if (bodyElement.innerText.includes("-----BEGIN PGP MESSAGE-----")) {
+      // Check if the body contains a PGP block.
+      if (bodyElement && bodyElement.innerText.includes("-----BEGIN PGP MESSAGE-----")) {
+
+        // Now it is safe to add the button
         messageView.addToolbarButton({
           title: "Decrypt Message",
           iconUrl: 'https://cdn.iconscout.com/icon/premium/png-256-thumb/unlock-1763261-1499511.png',
           section: sdk.Conversations.MessageViewToolbarSectionNames.MORE,
           onClick: async (event) => {
+
             const pgpBlockElement = Array.from(bodyElement.querySelectorAll('div, pre')).find(el => (el as HTMLElement).innerText.includes("-----BEGIN PGP MESSAGE-----")) as HTMLElement;
             if (pgpBlockElement) {
               elementToDecrypt = pgpBlockElement;
-
               const armoredMessage = normalizePgpBlock(pgpBlockElement.innerText);
               const sender = messageView.getSender().emailAddress;
-              console.log(sender)
 
               if (!armoredMessage) {
                 pgpBlockElement.innerHTML = `<p style="font-family: sans-serif; color: red;"><b>Decryption Failed:</b> Could not find a valid PGP block after cleaning.</p>`;
@@ -320,7 +327,6 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
               });
 
               if (response.error === 'vault_locked') {
-                // Use the unified prompt message
                 chrome.runtime.sendMessage({ type: "PROMPT_USER_UNLOCK" });
               } else if (!response.success) {
                 elementToDecrypt.innerHTML = `<p><b>Decryption Failed:</b> ${response.error}</p>`;
@@ -335,8 +341,8 @@ InboxSDK.load(2, SDK_APP_ID).then((sdk) => {
                     : (response.verification.status === 'invalid' ? '#dc3545' : '#6c757d'); // red or gray
 
                   verificationHTML = `<div style="padding: 10px; border-left: 4px solid ${color}; background: #f8f9fa; margin-bottom: 15px; color: #333; font-family: sans-serif; font-size: 14px;">
-                    <strong>${response.verification.text}</strong>
-                </div>`;
+                                    <strong>${response.verification.text}</strong>
+                                </div>`;
                 }
 
                 elementToDecrypt.innerHTML = verificationHTML +

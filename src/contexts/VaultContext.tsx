@@ -22,6 +22,7 @@ export const VaultContext = createContext<{
   addContact: (contact: NewContactData) => Promise<any>;
   deleteContactKey: (contactEmail: string, keyFingerprint: string) => Promise<any>;
   debugDumpVault: () => void;
+  decryptManual: (armoredMessage: string, senderEmail: string) => Promise<any>;
 }>({
   isUnlocked: null, isLoading: true, email: null, userKeys: null, contacts: [],
   attemptLogin: async () => ({ success: false, error: "Not implemented" }),
@@ -34,6 +35,7 @@ export const VaultContext = createContext<{
   addContact: async () => { },
   deleteContactKey: async () => { },
   debugDumpVault: () => { },
+  decryptManual: async () => ({ success: false, error: "Not implemented" }),
 });
 
 const storage = new Storage();
@@ -133,13 +135,23 @@ export default function VaultProvider({ children }) {
     return () => port.disconnect();
   }, []);
 
+const decryptManual = useCallback(async (armoredMessage: string, senderEmail: string): Promise<any> => {
+    console.log("[VaultContext] Starting manual decryption...");
+    const response = await sendToBackground("DECRYPT_MANUAL", { 
+        payload: { armoredMessage, senderEmail } // <-- Pass senderEmail
+    });
+    console.log("[VaultContext] Manual decryption response:", response);
+    return response;
+  }, [sendToBackground]);
+  
   const vault = {
     isUnlocked, isLoading, email,
     userKeys, contacts, lockVault, attemptLogin,
     generatePair, getKeys, deleteKey,
     getContacts, addContact, getEmail,
-    deleteContactKey, debugDumpVault
+    deleteContactKey, debugDumpVault, decryptManual
   };
+
 
   return (
     <VaultContext.Provider value={vault}>

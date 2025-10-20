@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import ContactTab from "~components/content/ContactsTab";
+import DecryptTab from "~components/content/DecryptTab";
 import KeysTab from "~components/content/KeysTab";
 import { OverviewTab } from "~components/content/OverviewTabs";
 import SettingsTab from "~components/content/SettingsTab";
@@ -61,6 +62,12 @@ export function MainLayout() {
                             Contacts
                         </button>
                         <button
+                            className={`pb-2 px-1 text-sm font-medium ${activeTab === 'decrypt' ? activeTabClasses : inactiveTabClasses}`}
+                            onClick={() => setActiveTab('decrypt')}
+                        >
+                            Decrypt
+                        </button>
+                        <button
                             className={`pb-2 px-1 text-sm font-medium ${activeTab === 'settings' ? activeTabClasses : inactiveTabClasses}`}
                             onClick={() => setActiveTab('settings')}
                         >
@@ -74,6 +81,7 @@ export function MainLayout() {
                     {activeTab === 'overview' && <OverviewTab />}
                     {activeTab === 'keys' && <KeysTab />}
                     {activeTab === 'contacts' && <ContactTab />}
+                    {activeTab === 'decrypt' && <DecryptTab />}
                     {activeTab === 'settings' && <SettingsTab />}
                 </div>
             </main>
